@@ -150,6 +150,7 @@ class KozpontiSzerver:
         szoba = None
         try:
             elso = await websocket.recv()
+            print("[WS] Várjuk az első üzenetet")
             try:
                 adat = json.loads(elso)
             except json.JSONDecodeError as hiba:
