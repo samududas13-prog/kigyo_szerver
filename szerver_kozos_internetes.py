@@ -145,6 +145,7 @@ class KozpontiSzerver:
         print(f"[-] Szoba törölve: {kod}")
 
     async def kapcsolat_kezelo(self, websocket) -> None:
+        print("[WS] Új kapcsolat érkezett")
         kapcsolat = KapcsolatAdat(websocket)
         szoba = None
         try:
