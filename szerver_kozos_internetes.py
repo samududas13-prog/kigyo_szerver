@@ -236,8 +236,12 @@ class KozpontiSzerver:
 
     async def futtat(self) -> None:
         print(f"Központi szerver indul → ws://{self.host}:{self.port}")
-        print("Leállítás: Ctrl+C")
-        async with websockets.serve(self.kapcsolat_kezelo, self.host, self.port, max_size=2**22):
+        async with websockets.serve(
+            self.kapcsolat_kezelo,
+            self.host,
+            self.port,
+            ping_interval=None
+        ):
             await asyncio.Future()
 
 
