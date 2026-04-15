@@ -4,8 +4,9 @@ import json
 from typing import Dict, Optional
 import socket
 import websockets
-
+import os
 from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot
+
 
 
 class KapcsolatAdat:
@@ -243,13 +244,10 @@ class KozpontiSzerver:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8765)))
     args = parser.parse_args()
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip_cim = s.getsockname()[0]
-    s.close()
-    szerver = KozpontiSzerver(ip_cim, args.port)
+
+    szerver = KozpontiSzerver(args.host, args.port)
     asyncio.run(szerver.futtat())
 
 
