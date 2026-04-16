@@ -16,7 +16,7 @@ class Beallitasok:
         self.kigyo_alap_hossz = 4  # A kígyó induló testpontjainak száma.
         self.kigyo_resz_tav = 28  # Az ideális távolság két egymást követő testpont között.
         self.kigyo_novekedes_alma_db = 1  # Egy alma után ennyi növekedési egységet kap a kígyó.
-        self.kigyo_no = 3  # Ennyi alma-növekedési egység után nő egy teljes testponttal a kígyó.
+        self.kigyo_no = 1  # Ennyi alma-növekedési egység után nő egy teljes testponttal a kígyó.
         self.kigyo_rajzolas_puffer = 100  # A képernyőn kívül még ennyi ráhagyással rajzolunk kígyót.
         self.kigyo_lathato_pont_limit = 350  # Ennyi testpontot küldünk át maximum hálózaton egy kígyóról.
         self.kigyo_utkozes_szorzo = 1.75  # Kígyófej és másik kör ütközési küszöbszorzója.
