@@ -139,6 +139,8 @@ class KozpontiSzerver:
             szoba.jatek_task.cancel()
             try:
                 await szoba.jatek_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
         self.szobak.pop(kod, None)
