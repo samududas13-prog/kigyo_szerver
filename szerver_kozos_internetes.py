@@ -5,9 +5,7 @@ from typing import Dict, Optional
 import socket
 import websockets
 import os
-from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot
-
-
+from kozos_jatekmag import Beallitasok, SzinSeged, VilagAll
 
 class KapcsolatAdat:
     def __init__(self, websocket):
@@ -147,12 +145,10 @@ class KozpontiSzerver:
         print(f"[-] Szoba törölve: {kod}")
 
     async def kapcsolat_kezelo(self, websocket) -> None:
-        print("[WS] Új kapcsolat érkezett")
         kapcsolat = KapcsolatAdat(websocket)
         szoba = None
         try:
             elso = await websocket.recv()
-            print("[WS] Várjuk az első üzenetet")
             try:
                 adat = json.loads(elso)
             except json.JSONDecodeError as hiba:
@@ -223,6 +219,8 @@ class KozpontiSzerver:
                     kapcsolat.magassag = int(adat.get("magassag", kapcsolat.magassag))
                 elif tipus == "ujraindulas":
                     szoba.vilag.ujrainditas(kapcsolat)
+                elif tipus == "szobabol_kilepes":
+                    szoba.jatekos_torlese(kapcsolat.azonosito)
                 elif tipus == "nev":
                     uj_nev = str(adat.get("nev", kapcsolat.nev))[:20] or kapcsolat.nev
                     kapcsolat.nev = uj_nev
