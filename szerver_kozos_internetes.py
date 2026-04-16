@@ -5,7 +5,7 @@ from typing import Dict, Optional
 import socket
 import websockets
 import os
-from kozos_jatekmag import Beallitasok, SzinSeged, VilagAll
+from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot
 
 class KapcsolatAdat:
     def __init__(self, websocket):
