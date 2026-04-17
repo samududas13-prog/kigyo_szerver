@@ -220,7 +220,7 @@ class KozpontiSzerver:
                 elif tipus == "ujraindulas":
                     szoba.vilag.ujrainditas(kapcsolat)
                 elif tipus == "szobabol_kilepes":
-                    szoba.jatekos_torlese(kapcsolat.azonosito)
+                    await szoba.jatekos_torlese(kapcsolat.azonosito)
                 elif tipus == "nev":
                     uj_nev = str(adat.get("nev", kapcsolat.nev))[:20] or kapcsolat.nev
                     kapcsolat.nev = uj_nev
