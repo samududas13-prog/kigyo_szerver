@@ -16,7 +16,7 @@ class Beallitasok:
         self.kigyo_alap_hossz = 4  # A kígyó induló testpontjainak száma.
         self.kigyo_resz_tav = 28  # Az ideális távolság két egymást követő testpont között.
         self.kigyo_novekedes_alma_db = 1  # Egy alma után ennyi növekedési egységet kap a kígyó.
-        self.kigyo_no = 1  # Ennyi alma-növekedési egység után nő egy teljes testponttal a kígyó.
+        self.kigyo_no = 3  # Ennyi alma-növekedési egység után nő egy teljes testponttal a kígyó.
         self.kigyo_rajzolas_puffer = 100  # A képernyőn kívül még ennyi ráhagyással rajzolunk kígyót.
         self.kigyo_lathato_pont_limit = 350  # Ennyi testpontot küldünk át maximum hálózaton egy kígyóról.
         self.kigyo_utkozes_szorzo = 1.75  # Kígyófej és másik kör ütközési küszöbszorzója.
@@ -397,21 +397,29 @@ class VilagAllapot:
             jatekos.mozog_fel = fel
             jatekos.mozog_le = le
 
-    def ujrainditas(self, adatok) -> None:
-        if isinstance(adatok, str):
-            azonosito = adatok
-            if azonosito not in self.jatekosok:
-                return
+    def ujrainditas(self, adatok):
+        if isinstance(adatok, tuple):
+            azonosito, nev, szin = adatok
+            #if azonosito not in self.jatekosok:
+            #   return
+            try:
+                self.jatekos_torlese(azonosito)
+            except:
+                pass
+            self.jatekos_hozzaadasa(azonosito, nev, szin)
+            
+        
+            
+        #if azonosito in self.jatekosok:
+         #   pass
+            
+            #nev = self.jatekosok[azonosito].nev
+            #szin = self.jatekosok[azonosito].szin
+            
+
+            
         else:
             azonosito = adatok.azonosito
-        if azonosito in self.jatekosok:
-            
-            nev = self.jatekosok[azonosito].nev
-            szin = self.jatekosok[azonosito].szin
-            self.jatekos_torlese(azonosito)
-            self.jatekos_hozzaadasa(azonosito, nev, szin)
-        
-        else:
             nev = adatok.nev
             szin = adatok.szin
             self.jatekos_torlese(azonosito)
@@ -779,8 +787,8 @@ class VilagAllapot:
 
     def nezet_jatekosnak(self, azonosito: str, szelesseg: int, magassag: int) -> dict:
         kamera_x, kamera_y = self.kamera_pozicio(azonosito, szelesseg, magassag)
-        kamera_x = max(0.0, min(self.beallitasok.vilag_szelesseg - szelesseg, kamera_x))
-        kamera_y = max(0.0, min(self.beallitasok.vilag_magassag - magassag, kamera_y))
+        kamera_x = kamera_x
+        kamera_y = kamera_y
 
         allapot = {
             "jatek_mode": self.jatek_mode,
