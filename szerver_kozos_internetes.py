@@ -6,6 +6,7 @@ import socket
 import websockets
 import os
 from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot
+import time
 
 class KapcsolatAdat:
     def __init__(self, websocket):
@@ -31,7 +32,7 @@ class SzobaAdat:
         self.fut = True  # Jelzi, hogy a szoba saját játékciklusa fusson-e.
         self.kovetkezo_azonosito = 1  # Sorszámláló az új játékosazonosítókhoz.
         self.jatek_task: Optional[asyncio.Task] = None  # A szoba háttérben futó frissítő taskja.
-
+        self.elozo_ido = time.perf_counter()
     def uj_azonosito(self) -> str:
         azonosito = f"jatekos_{self.kovetkezo_azonosito}"
         self.kovetkezo_azonosito += 1
@@ -40,7 +41,12 @@ class SzobaAdat:
     async def jatek_loop(self) -> None:
         while self.fut:
             await asyncio.sleep(1 / self.beallitasok.szerver_fps)
-            self.vilag.frissites()
+
+            most = time.perf_counter()
+            delta_ido = most - self.elozo_ido
+            self.elozo_ido = most
+            delta_ido = min(delta_ido, 0.05)
+            self.vilag.frissites(delta_ido)
 
             bontando_azonositok = []
             for azonosito, kapcsolat in list(self.kapcsolatok.items()):
@@ -255,4 +261,7 @@ def main() -> None:
 
     szerver = KozpontiSzerver(args.host, args.port)
     asyncio.run(szerver.futtat())
+
+
+
 main()
