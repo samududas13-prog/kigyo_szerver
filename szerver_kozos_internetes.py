@@ -237,7 +237,6 @@ class KozpontiSzerver:
                 await self._ures_szoba_takaritas(szoba.kod)
 
     async def futtat(self) -> None:
-        print("Szia Most elkezdek működni de ne is zavarjon.")
         print(f"Központi szerver indul → ws://{self.host}:{self.port}")
         async with websockets.serve(
             self.kapcsolat_kezelo,
@@ -256,7 +255,4 @@ def main() -> None:
 
     szerver = KozpontiSzerver(args.host, args.port)
     asyncio.run(szerver.futtat())
-
-
-if __name__ == "__main__":
-    main()
+main()
