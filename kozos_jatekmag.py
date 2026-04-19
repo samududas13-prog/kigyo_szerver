@@ -53,6 +53,8 @@ class Beallitasok:
         self.szerver_port_tartomany = 30000  # A szobakód -> port képzéshez használt tartomány.
         self.felfedezo_port = 37021  # A LAN felfedező UDP portja.
         self.felfedezo_valasz_ido = 2.5  # Ennyi másodpercig vár a kliens LAN válaszra.
+        
+        self.dontes_gyakorisag = 5
 
 
 class KorSeged:
@@ -168,12 +170,14 @@ class KigyoAdat:
         self.utvonal = []  # A fej korábbi pontjai, ebből követik a testrészek az előzőt.
         self.test_pontok = []  # A kígyó összes testpontja világkoordinátában.
         self.dontes_idozito = 0  # Az AI újratervezésének időzítője.
-        self.dontes_gyakorisag = 5  # Ennyi frissítésenként számol új AI irányt.
+        self.dontes_gyakorisag = beallitasok.dontes_gyakorisag  # Ennyi frissítésenként számol új AI irányt.
         self.allapot = "vadaszat"  # A jelenlegi AI állapot neve.
         self.celpont = None  # Az AI által célba vett pozíció.
         self.csapda_mod = False  # Fenntartott állapot a későbbi bekerítő viselkedéshez.
         self.szerep = "uldozo"  # Hell nehézségnél kiosztott szerepkör.
         self.gyorsit = False  # Emberi kígyónál jelzi, hogy gyorsítás aktív-e.
+        self.utolso_racs = []
+        self.dontes_fazis = 0
 
         self._nehezseg_beallitas(nehezseg_szint, beallitasok)
         self._letrehoz_indulo_test(fej_x, fej_y, beallitasok)
@@ -243,6 +247,7 @@ class KigyoAdat:
             "alma_pontok": self.alma_pontok,
             "sugar": self.sugar,
             "jatekos_e": self.jatekos_e,
+            "ossz_testhosz": len(self.test_pontok)
         }
 
 
@@ -264,6 +269,9 @@ class VilagAllapot:
         self.kigyo_respawn_idozito = 0  # Az AI kígyó visszatöltési időzítője.
         self.alma_potlasi_idozito = 0  # Az alma pótlás ritmusa.
         self.veletlen = random.Random()  # Saját véletlen generátor a világ logikájához.
+        self.dontes_kiosztas = 0
+        self.frissitesi_szamlalo = 0
+        self.max_frisitesi_szamolo = self.beallitasok.dontes_gyakorisag
         self.uj_jatek(jatek_mode, nehezseg_szint)
 
     def uj_jatek(self, jatek_mode: str, nehezseg_szint: str) -> None:
@@ -360,17 +368,19 @@ class VilagAllapot:
             x, y = self._szoba_pozicio_biztonsagos(self.beallitasok.kigyó_sugár, "kigyo")
             uj = KigyoAdat(azonosito, nev, szin, self.nehezseg_szint, x, y, self.beallitasok, True)
             self.jatekosok[azonosito] = uj
-            self._kigyok_racsozasa()
+            self.racs_kigyo_hozzaad(uj)
         else:
             x, y = self._szoba_pozicio_biztonsagos(self.beallitasok.jatekos_sugar, "patogos")
             self.jatekosok[azonosito] = PattogoJatekos(azonosito, nev, szin, x, y, self.beallitasok)
-            self._pattogok_racsozasa()
 
     def jatekos_torlese(self, azonosito: str) -> None:
+        jatekos = self.jatekosok.get(azonosito)
+
+        if isinstance(jatekos, KigyoAdat):
+            self._kigyo_racsbol_torles(jatekos)
+
         if azonosito in self.jatekosok:
             del self.jatekosok[azonosito]
-        self._kigyok_racsozasa()
-        self._pattogok_racsozasa()
 
     def jatekos_irany_beallitasa(self, azonosito: str, dx: float, dy: float) -> None:
         if self.jatek_mode != "alma":
@@ -460,8 +470,12 @@ class VilagAllapot:
             x, y = self._szoba_pozicio_biztonsagos(self.beallitasok.kigyó_sugár, "kigyo")
             uj = KigyoAdat(nev, nev, szin, self.nehezseg_szint, x, y, self.beallitasok, False)
             uj.irany_x, uj.irany_y = KorSeged.normalizal(self.veletlen.uniform(-1.0, 1.0), self.veletlen.uniform(-1.0, 1.0))
+            uj.dontes_fazis = self.dontes_kiosztas
+            self.dontes_kiosztas += 1
+            if self.dontes_kiosztas >= uj.dontes_gyakorisag:
+                self.dontes_kiosztas = 0
             self.kigyo_ellenseg.append(uj)
-            self._kigyok_racsozasa()
+            self.racs_kigyo_hozzaad(uj)
 
     def _pattogok_potlas(self, mennyiseg: int) -> None:
         for _ in range(mennyiseg):
@@ -470,16 +484,99 @@ class VilagAllapot:
             dx = self.veletlen.choice([-1, 1]) * self.veletlen.uniform(self.beallitasok.patogo_min_sebesseg, self.beallitasok.patogo_max_sebesseg)
             dy = self.veletlen.choice([-1, 1]) * self.veletlen.uniform(self.beallitasok.patogo_min_sebesseg, self.beallitasok.patogo_max_sebesseg)
             self.patog_ellenseg.append(PattogoEllenseg(f"Patogo_{self.eddigi_patogok}", x, y, dx, dy, self.beallitasok))
-        self._pattogok_racsozasa()
+        
+    def _kigyo_racs_rekord_index(self, cella_lista, azonosito: str, index: int) -> int:
+        for poz, rekord in enumerate(cella_lista):
+            rekord_azonosito, rekord_index, _, _, _ = rekord
+            if rekord_azonosito == azonosito and rekord_index == index:
+                return poz
+        return -1
+
+    def _kigyo_racsbol_torles(self, kigyo: KigyoAdat) -> None:
+        if not hasattr(kigyo, "utolso_racs"):
+            return
+
+        for index, regi_kulcs in enumerate(kigyo.utolso_racs):
+            if regi_kulcs is None:
+                continue
+
+            cella_lista = self.racs_vilag_kigyo.get(regi_kulcs)
+            if not cella_lista:
+                continue
+
+            regi_poz = self._kigyo_racs_rekord_index(cella_lista, kigyo.azonosito, index)
+            if regi_poz != -1:
+                del cella_lista[regi_poz]
+                if not cella_lista:
+                    del self.racs_vilag_kigyo[regi_kulcs]
+
+        kigyo.utolso_racs = [None] * len(kigyo.test_pontok)
 
     def _kigyok_racsozasa(self) -> None:
-        self.racs_vilag_kigyo.clear()
         for kigyo in self.osszes_kigyo():
             if not kigyo.el:
                 continue
+
+            pont_db = len(kigyo.test_pontok)
+
+            if not hasattr(kigyo, "utolso_racs"):
+                kigyo.utolso_racs = [None] * pont_db
+
+            if len(kigyo.utolso_racs) < pont_db:
+                kigyo.utolso_racs.extend([None] * (pont_db - len(kigyo.utolso_racs)))
+
+            elif len(kigyo.utolso_racs) > pont_db:
+                for index in range(pont_db, len(kigyo.utolso_racs)):
+                    regi_kulcs = kigyo.utolso_racs[index]
+                    if regi_kulcs is not None:
+                        cella_lista = self.racs_vilag_kigyo.get(regi_kulcs)
+                        if cella_lista:
+                            regi_poz = self._kigyo_racs_rekord_index(cella_lista, kigyo.azonosito, index)
+                            if regi_poz != -1:
+                                del cella_lista[regi_poz]
+                                if not cella_lista:
+                                    del self.racs_vilag_kigyo[regi_kulcs]
+                del kigyo.utolso_racs[pont_db:]
+
             for index, (x, y) in enumerate(kigyo.test_pontok):
-                kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, x, y)
-                self.racs_vilag_kigyo[kulcs].append((kigyo.azonosito, index, x, y, kigyo.sugar))
+                uj_kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, x, y)
+                regi_kulcs = kigyo.utolso_racs[index]
+
+                if regi_kulcs is None:
+                    self.racs_vilag_kigyo[uj_kulcs].append((kigyo.azonosito, index, x, y, kigyo.sugar))
+                    kigyo.utolso_racs[index] = uj_kulcs
+                    continue
+
+                if regi_kulcs == uj_kulcs:
+                    cella_lista = self.racs_vilag_kigyo.get(uj_kulcs)
+                    if cella_lista is None:
+                        self.racs_vilag_kigyo[uj_kulcs] = [(kigyo.azonosito, index, x, y, kigyo.sugar)]
+                        continue
+
+                    regi_poz = self._kigyo_racs_rekord_index(cella_lista, kigyo.azonosito, index)
+                    if regi_poz != -1:
+                        cella_lista[regi_poz] = (kigyo.azonosito, index, x, y, kigyo.sugar)
+                    else:
+                        cella_lista.append((kigyo.azonosito, index, x, y, kigyo.sugar))
+                    continue
+
+                regi_lista = self.racs_vilag_kigyo.get(regi_kulcs)
+                if regi_lista:
+                    regi_poz = self._kigyo_racs_rekord_index(regi_lista, kigyo.azonosito, index)
+                    if regi_poz != -1:
+                        del regi_lista[regi_poz]
+                        if not regi_lista:
+                            del self.racs_vilag_kigyo[regi_kulcs]
+
+                self.racs_vilag_kigyo[uj_kulcs].append((kigyo.azonosito, index, x, y, kigyo.sugar))
+                kigyo.utolso_racs[index] = uj_kulcs           
+
+    def racs_kigyo_hozzaad(self, kigyo: KigyoAdat):
+        kigyo.utolso_racs = []
+        for index, (x, y) in enumerate(kigyo.test_pontok):
+            kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, x, y)
+            self.racs_vilag_kigyo[kulcs].append((kigyo.azonosito, index, x, y, kigyo.sugar))
+            kigyo.utolso_racs.append(kulcs)
 
     def _pattogok_racsozasa(self) -> None:
         self.racs_vilag_patog.clear()
@@ -498,7 +595,7 @@ class VilagAllapot:
     def _alma_mod_frissites(self) -> None:
         if not self.jatekosok and not self.kigyo_ellenseg:
             return
-
+        
         for kigyo in self.osszes_kigyo():
             if not kigyo.el:
                 continue
@@ -509,18 +606,19 @@ class VilagAllapot:
                 kigyo.irany_x, kigyo.irany_y = uj_dx, uj_dy
                 kigyo.sebesseg = kigyo.alap_sebesseg
             self._kigyo_fej_leptetes(kigyo)
-
         self._kigyok_racsozasa()
-
         for kigyo in self.osszes_kigyo():
             if not kigyo.el:
                 continue
             self._kigyo_etetes(kigyo)
             self._kigyo_utkozesek(kigyo)
 
-        self.kigyo_ellenseg = [k for k in self.kigyo_ellenseg if k.el]
-        self._kigyok_racsozasa()
+        halott_ai_kigyok = [k for k in self.kigyo_ellenseg if not k.el]
+        for kigyo in halott_ai_kigyok:
+            self._kigyo_racsbol_torles(kigyo)
 
+        self.kigyo_ellenseg = [k for k in self.kigyo_ellenseg if k.el]
+        
         self.alma_potlasi_idozito += 1
         if self.alma_potlasi_idozito >= 10:
             self.alma_potlasi_idozito = 0
@@ -543,7 +641,8 @@ class VilagAllapot:
 
         for azonosito in halott_jatekos_azonositok:
             self.jatekos_torlese(azonosito)
-    
+        self.frissitesi_szamlalo += 1
+          
     def _kigyo_fej_leptetes(self, kigyo: KigyoAdat) -> None:
         fej_x, fej_y = kigyo.test_pontok[0]
         kigyo.test_pontok[0][0] = fej_x + kigyo.irany_x * kigyo.sebesseg
@@ -626,11 +725,10 @@ class VilagAllapot:
         return eredmeny
 
     def _legjobb_irany_ai(self, kigyo: KigyoAdat) -> Tuple[float, float]:
-        kigyo.dontes_idozito += 1
-        if kigyo.dontes_idozito < kigyo.dontes_gyakorisag:
+        
+        if self.frissitesi_szamlalo % kigyo.dontes_gyakorisag != kigyo.dontes_fazis:
             return kigyo.irany_x, kigyo.irany_y
-        kigyo.dontes_idozito = 0
-
+        
         fej_x, fej_y = kigyo.fej_pozicio()
         almak = self._kozelebbi_almak(fej_x, fej_y)
         cel_x, cel_y = self._celpont_kereses(kigyo, almak)
@@ -787,8 +885,6 @@ class VilagAllapot:
 
     def nezet_jatekosnak(self, azonosito: str, szelesseg: int, magassag: int) -> dict:
         kamera_x, kamera_y = self.kamera_pozicio(azonosito, szelesseg, magassag)
-        kamera_x = kamera_x
-        kamera_y = kamera_y
 
         allapot = {
             "jatek_mode": self.jatek_mode,
@@ -802,14 +898,57 @@ class VilagAllapot:
 
         if self.jatek_mode == "alma":
             allapot["almak"] = self._lathato_almak(kamera_x, kamera_y, szelesseg, magassag)
-            allapot["jatekosok"] = {
-                az: kigyo.allapot_dict(kamera_x, kamera_y, szelesseg, magassag, self.beallitasok.kigyo_rajzolas_puffer, self.beallitasok.kigyo_lathato_pont_limit)
-                for az, kigyo in self.jatekosok.items()
-            }
-            allapot["kigyo_ellenseg"] = [
-                kigyo.allapot_dict(kamera_x, kamera_y, szelesseg, magassag, self.beallitasok.kigyo_rajzolas_puffer, self.beallitasok.kigyo_lathato_pont_limit)
-                for kigyo in self.kigyo_ellenseg if kigyo.el
-            ]
+
+            allapot["jatekosok"] = {}
+            allapot["kigyo_ellenseg"] = []
+
+            sajat = self.jatekosok.get(azonosito)
+            if isinstance(sajat, KigyoAdat):
+                allapot["jatekosok"][azonosito] = sajat.allapot_dict(
+                    kamera_x,
+                    kamera_y,
+                    szelesseg,
+                    magassag,
+                    self.beallitasok.kigyo_rajzolas_puffer,
+                    self.beallitasok.kigyo_lathato_pont_limit
+                )
+
+            lathato_azonositok = self.lathato_kigyo_azonositok(
+                kamera_x,
+                kamera_y,
+                szelesseg,
+                magassag,
+                sajat_id=azonosito
+            )
+
+            ai_lookup = {kigyo.azonosito: kigyo for kigyo in self.kigyo_ellenseg if kigyo.el}
+
+            for masik_azonosito in lathato_azonositok:
+                jatekos_kigyo = self.jatekosok.get(masik_azonosito)
+
+                if isinstance(jatekos_kigyo, KigyoAdat) and jatekos_kigyo.el:
+                    allapot["jatekosok"][masik_azonosito] = jatekos_kigyo.allapot_dict(
+                        kamera_x,
+                        kamera_y,
+                        szelesseg,
+                        magassag,
+                        self.beallitasok.kigyo_rajzolas_puffer,
+                        self.beallitasok.kigyo_lathato_pont_limit
+                    )
+                    continue
+
+                ai_kigyo = ai_lookup.get(masik_azonosito)
+                if ai_kigyo is not None:
+                    allapot["kigyo_ellenseg"].append(
+                        ai_kigyo.allapot_dict(
+                            kamera_x,
+                            kamera_y,
+                            szelesseg,
+                            magassag,
+                            self.beallitasok.kigyo_rajzolas_puffer,
+                            self.beallitasok.kigyo_lathato_pont_limit
+                        )
+                    )
         else:
             allapot["jatekosok"] = {
                 az: jatekos.allapot_dict()
@@ -820,6 +959,32 @@ class VilagAllapot:
             ]
         return allapot
 
+    def lathato_kigyo_azonositok(self, kamera_x: float, kamera_y: float, szelesseg: int, magassag: int, sajat_id: Optional[str] = None) -> set[str]:
+        bal = kamera_x - self.beallitasok.kigyo_rajzolas_puffer
+        jobb = kamera_x + szelesseg + self.beallitasok.kigyo_rajzolas_puffer
+        fent = kamera_y - self.beallitasok.kigyo_rajzolas_puffer
+        lent = kamera_y + magassag + self.beallitasok.kigyo_rajzolas_puffer
+
+        start_cx, start_cy = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, bal, fent)
+        end_cx, end_cy = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, jobb, lent)
+
+        eredmeny = set()
+
+        for cx in range(start_cx - 1, end_cx + 2):
+            for cy in range(start_cy - 1, end_cy + 2):
+                for azonosito, index, x, y, sugar in self.racs_vilag_kigyo.get((cx, cy), []):
+                    if sajat_id is not None and azonosito == sajat_id:
+                        continue
+
+                    if bal < x < jobb and fent < y < lent:
+                        eredmeny.add(azonosito)
+
+        return eredmeny
+        
+        
+        
+        
+        
     def _lathato_almak(self, kamera_x: float, kamera_y: float, szelesseg: int, magassag: int) -> List[Tuple[float, float]]:
         bal = kamera_x - self.beallitasok.alma_rajzolas_puffer
         jobb = kamera_x + szelesseg + self.beallitasok.alma_rajzolas_puffer
