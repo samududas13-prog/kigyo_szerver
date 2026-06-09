@@ -19,10 +19,13 @@ class KapcsolatAdat:
         self.magassag = 830  # A kliens ablakának magassága a személyre szabott nézethez.
         self.ip_cim = ""
         self.csatlakozott = False  # Jelzi, hogy a teljes belépési kézfogás már lefutott-e.
+        self.nagy_csomag_kuldes = 0
 
 
 class SzobaAdat:
     def __init__(self, kod: str, jatek_mode: str, nehezseg_szint: str, beallitasok: Beallitasok):
+        self.kapcsolat_adatcsomag_szetosztas_szamolas = 0
+        self.kuldes_szamolo = 0
         self.kod = kod  # Az internetes szoba 5 jegyű kódja.
         self.jatek_mode = jatek_mode  # Az adott szobában futó játékmód.
         self.nehezseg_szint = nehezseg_szint  # Az adott szobában futó nehézségi szint.
@@ -46,24 +49,34 @@ class SzobaAdat:
             delta_ido = most - self.elozo_ido
             self.elozo_ido = most
             delta_ido = min(delta_ido, 0.05)
+
             self.vilag.frissites(delta_ido)
 
+            self.kuldes_szamolo += 1
+            if self.kuldes_szamolo >= self.beallitasok.szerver_kliens_szabályuzott_kuldes:
+                self.kuldes_szamolo = 0
+
             bontando_azonositok = []
+
             for azonosito, kapcsolat in list(self.kapcsolatok.items()):
                 if not kapcsolat.csatlakozott:
                     continue
-                if azonosito not in self.vilag.jatekosok:
-                    # akkor is küldünk állapotot!
-                    allapot = self.vilag.nezet_jatekosnak(azonosito, kapcsolat.szelesseg, kapcsolat.magassag)
-                    uzenet = json.dumps({"tipus": "allapot", "allapot": allapot})
-                    try:
-                        await kapcsolat.websocket.send(uzenet)
-                    except Exception:
-                        bontando_azonositok.append(azonosito)
-                    continue
+
+                if self.kuldes_szamolo == kapcsolat.nagy_csomag_kuldes:
+                    allapot = self.vilag.nezet_jatekosnak(
+                        azonosito,
+                        kapcsolat.szelesseg,
+                        kapcsolat.magassag
+                    )
                 else:
-                    allapot = self.vilag.nezet_jatekosnak(azonosito, kapcsolat.szelesseg, kapcsolat.magassag)
-                    uzenet = json.dumps({"tipus": "allapot", "allapot": allapot})
+                    allapot = self.vilag.nezet_jatekosnak_kicsi(
+                        azonosito,
+                        kapcsolat.szelesseg,
+                        kapcsolat.magassag
+                    )
+
+                uzenet = json.dumps({"tipus": "allapot", "allapot": allapot})
+
                 try:
                     await kapcsolat.websocket.send(uzenet)
                 except Exception:
@@ -76,12 +89,17 @@ class SzobaAdat:
                 self.fut = False
                 break
 
-    async def jatekos_hozzaadasa(self, kapcsolat: KapcsolatAdat) -> str:
+    async def jatekos_hozzaadasa(self, kapcsolat: KapcsolatAdat, tank) -> str:
         kapcsolat.azonosito = self.uj_azonosito()
         kapcsolat.szoba_kod = self.kod
         kapcsolat.csatlakozott = True
+        kapcsolat.nagy_csomag_kuldes = self.kapcsolat_adatcsomag_szetosztas_szamolas
+        self.kapcsolat_adatcsomag_szetosztas_szamolas += 1
+        if self.kapcsolat_adatcsomag_szetosztas_szamolas >= self.beallitasok.szerver_kliens_szabályuzott_kuldes:
+            self.kapcsolat_adatcsomag_szetosztas_szamolas = 0
         self.kapcsolatok[kapcsolat.azonosito] = kapcsolat
-        self.vilag.jatekos_hozzaadasa(kapcsolat.azonosito, kapcsolat.nev, kapcsolat.szin)
+        tank = tank
+        self.vilag.jatekos_hozzaadasa(kapcsolat.azonosito, kapcsolat.nev, kapcsolat.szin, tank)
         return kapcsolat.azonosito
 
     async def jatekos_torlese(self, azonosito: str) -> None:
@@ -174,7 +192,7 @@ class KozpontiSzerver:
             tipus = adat.get("tipus", "")
             if tipus == "szoba_letrehozas":
                 jatek_mode = str(adat.get("jatek_mode", "alma"))
-                if jatek_mode not in ("alma", "patogos"):
+                if jatek_mode not in ("alma", "tankos"):
                     jatek_mode = "alma"
                 nehezseg_szint = str(adat.get("nehezseg_szint", "Normal"))
                 if nehezseg_szint not in ("Easy", "Normal", "Hard", "Nightmare", "Hell"):
@@ -189,8 +207,8 @@ class KozpontiSzerver:
             else:
                 await self._hiba_kuldes(websocket, "Ismeretlen belépési kérés.")
                 return
-
-            await szoba.jatekos_hozzaadasa(kapcsolat)
+            tank = adat.get("kep", None)
+            await szoba.jatekos_hozzaadasa(kapcsolat, tank)
             init = {
                 "tipus": "init",
                 "sajat_id": kapcsolat.azonosito,
@@ -212,13 +230,14 @@ class KozpontiSzerver:
                     szoba.vilag.jatekos_irany_beallitasa(kapcsolat.azonosito, float(adat.get("dx", 0.0)), float(adat.get("dy", 0.0)))
                 elif tipus == "sebesseg" and szoba.jatek_mode == "alma":
                     szoba.vilag.jatekos_gyorsitas_beallitasa(kapcsolat.azonosito, bool(adat.get("gyors", False)))
-                elif tipus == "mozgas" and szoba.jatek_mode == "patogos":
-                    szoba.vilag.pattogos_mozgas_beallitasa(
+                elif tipus == "mozgas" and szoba.jatek_mode == "tankos":
+                    szoba.vilag.tankos_mozgas_beallitasa(
                         kapcsolat.azonosito,
                         bool(adat.get("balra", False)),
                         bool(adat.get("jobbra", False)),
                         bool(adat.get("fel", False)),
                         bool(adat.get("le", False)),
+                        bool(adat.get("loves", False))
                     )
                 elif tipus == "atmeretezes":
                     kapcsolat.szelesseg = int(adat.get("szelesseg", kapcsolat.szelesseg))
