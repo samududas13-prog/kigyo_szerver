@@ -750,7 +750,7 @@ class Kamera:
         self.kepernyo_magassag = kepernyo_magassag
 
         
-        self.holtter_szelesseg = 150  
+        self.holtter_szelesseg = 15
         self.holtter_magassag = 200   
         
        
