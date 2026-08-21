@@ -1,8 +1,10 @@
 import math
 import random
 import numpy as np
+import os
+import json
 from collections import defaultdict, deque
-from typing import Dict, List, Tuple, Optional, Iterable
+from typing import Dict, List, Tuple, Optional
 from nevek_10000 import NEVEK
 
 class Beallitasok:
@@ -11,131 +13,383 @@ class Beallitasok:
         self.vilag_magassag = 15000  
         self.tank_vilag_szelesseg = 50
         self.tank_vilag_magassag = 50
-        self.racsok_nagysaga = 200  # A ritkított térbeli rács cellamérete gyors keresésekhez.
-        self.fps = 30  # A kliens cél képkockaszáma.
-        self.szerver_fps = 30  # A szerver cél frissítési frekvenciája.
+        self.racsok_nagysaga = 200
+        self.fps = 50
+        self.szerver_fps = 30 
         self.kezdes = True
+        self.platformer_zoom = 3
+        self.platformer_jatekos_mozgas_szorzo = 60
+        self.platformer_ugras = -7
+        self.gyorsulas_csokentes = 0.55
+        self.gravitacio = 0.3
+        self.alap_gravitacio = self.gravitacio
+        self.max_gravitacio = 5
 
-        self.kigyó_sugár = 20  # A kígyó egy testpontjának sugara.
-        self.kigyo_alap_hossz = 4  # A kígyó induló testpontjainak száma.
-        self.kigyo_resz_tav = 28  # Az ideális távolság két egymást követő testpont között.
-        self.kigyo_novekedes_alma_db = 1  # Egy alma után ennyi növekedési egységet kap a kígyó.
-        self.kigyo_no = 3  # Ennyi alma-növekedési egység után nő egy teljes testponttal a kígyó.
-        self.kigyo_csokenes_sebeseg = 10 # enyi frame alata veszit egyet a test hosszából.
-        self.kigyo_rajzolas_puffer = 100  # A képernyőn kívül még ennyi ráhagyással rajzolunk kígyót.
-        self.kigyo_lathato_pont_limit = 350  # Ennyi testpontot küldünk át maximum hálózaton egy kígyóról.
-        self.kigyo_utkozes_szorzo = 1.75  # Kígyófej és másik kör ütközési küszöbszorzója.
-        self.kigyo_onvedo_index = 1  # Saját fejhez közeli ennyi pontot kihagyunk önütközésnél.
-        self.kigyo_dontesi_szogek = [-60, -45, -30, -15, 0, 15, 30, 45, 60]  # AI lehetséges irányszögei.
-        self.kigyo_veszely_puffer = 3.0  # Falakhoz és testekhez tartott biztonsági puffer a kígyó AI-nak.
-        self.kigyo_lato_ido = 60  # Ennyi jövőbeli lépést becsül meg a kígyó AI.
-        self.kigyo_max_memoria_szorzo = 6  # Ennyiszeres pufferrel tároljuk a kígyó útvonalpontjait.
-        self.kigyo_respawn_varakozas = 24  # Ennyi frissítésenként pótoljuk az AI kígyókat.
-        self.kigyo_spawn_puffer = 320  # Új kígyó ennyinél közelebb ne szülessen játékoshoz.
+        self.kigyó_sugár = 20 
+        self.kigyo_alap_hossz = 4  
+        self.kigyo_resz_tav = 28 
+        self.kigyo_novekedes_alma_db = 1  
+        self.kigyo_no = 3 
+        self.kigyo_csokenes_sebeseg = 10 
+        self.kigyo_rajzolas_puffer = 100  
+        self.kigyo_lathato_pont_limit = 500
+        self.kigyo_utkozes_szorzo = 1.75 
+        self.kigyo_onvedo_index = 1 
+        self.kigyo_dontesi_szogek = [-60, -45, -30, -15, 0, 15, 30, 45, 60] 
+        self.kigyo_veszely_puffer = 3.0 
+        self.kigyo_lato_ido = 60 
+        self.kigyo_max_memoria_szorzo = 6 
+        self.kigyo_respawn_varakozas = 24 
+        self.kigyo_spawn_puffer = 220 
 
-        self.alma_size = 25  # Egy alma négyzetének oldalmérete.
-        self.alma_kor_sugár = 12.5  # Az alma közelítő köre ütközéshez.
-        self.alma_maximum = 10000  # A pályán egyszerre tartható almák felső korlátja.
-        self.alma_potlasi_limit = 50  # Egy frissítésben maximum ennyi új almát rakunk le.
-        self.alma_lathato_limit = 700  # Hálózatra egyszerre ennyi almát küldünk legfeljebb.
-        self.alma_rajzolas_puffer = 60  # A képernyőn kívül még ennyi ráhagyással rajzolunk almát.
+        self.alma_size = 25 
+        self.alma_kor_sugár = 12.5  
+        self.alma_maximum = 10000  
+        self.alma_potlasi_limit = 50  
+        self.alma_lathato_limit = 700  
+        self.alma_rajzolas_puffer = 60 
 
-        self.jatekos_sugar = 25  # A tankos játékos köreinek sugara.
-        self.jatekos_sebesseg = 10.0 * self.fps # A tankos játékos alap mozgási sebessége.
-        self.jatekos_hp = 10  # A tankos játékos induló élete.
-        self.jatekos_utkozes_puffer = 2.0  # tankos körök minimális szétválasztási ráhagyása.
+        self.jatekos_sugar = 25  
+        self.jatekos_sebesseg = 500.0
+        self.jatekos_hp = 100  
+        self.jatekos_utkozes_puffer = 2.0 
 
-        self.loves_cooldown = 4
+        self.loves_cooldown = 0.5
 
-        self.pause_gomb_szelesseg = 200  # A pause gomb szélessége.
-        self.pause_gomb_magassag = 50  # A pause gomb magassága.
+        self.pause_gomb_szelesseg = 200 
+        self.pause_gomb_magassag = 50 
+        
+        self.szoba_kod_hossz = 2 
+        self.szerver_alap_port = 20000 
+        self.szerver_port_tartomany = 30000 
+        self.felfedezo_port = 37021  
+        self.felfedezo_valasz_ido = 2.5
 
-        self.szoba_kod_hossz = 2  # A létrehozott LAN szobakód hossza.
-        self.szerver_alap_port = 20000  # A szobakódokból képzett portok alsó határa.
-        self.szerver_port_tartomany = 30000  # A szobakód -> port képzéshez használt tartomány.
-        self.felfedezo_port = 37021  # A LAN felfedező UDP portja.
-        self.felfedezo_valasz_ido = 2.5  # Ennyi másodpercig vár a kliens LAN válaszra.
+        self.buffok_szelesege = 60
+        self.buff_kijelzes_felszedeskor_ido = 2
         
         self.dontes_gyakorisag = 5
         self.kigyo_max_fordulas_fok = 100
         self.top_hany = 5
         self.szerver_kliens_szabályuzott_kuldes = 5
 
+        self.tank_kepek = ["tank_1_kek", "tank_2_kek", "tank_3_kek", "tank_4_kek"]
+        
+        self.chest_kincsek = [["hp", "hp+", "hp-"], ["speed", "speed+", "speed-"],  ["kill", "kill+", "kill-"],  ["shild", "shild+",  "shild-"], ["rotate", "rotate+", "rotate-"], ["bulet", "bulet+", "bulet-"], ["teleport", "teleport", "teleport"]]
+
+        self.buff_ertekek = {
+            "teleport": {
+                "ertek": [None],
+                "ido": [0],
+            },
+
+            "hp+": {
+                "ertek": [40, 15, 20, 25, 30, 35, 40],
+                "ido": [0],
+            },
+            "hp-": {
+                "ertek": [-8, -12, -16, -20, -25, -30, -35],
+                "ido": [0],
+            },
+
+            "kill+": {
+                "ertek": [1, 1, 1, 1, 1, 2, 2, 2, 3],
+                "ido": [0],
+            },
+            "kill-": {
+                "ertek": [-1, -1, -1, -2, -2, -2, -3],
+                "ido": [0],
+            },
+
+            # Lövési cooldown: kisebb = gyorsabb lövés.
+            "bulet+": {
+                "ertek": [0.42, 0.38, 0.34, 0.30, 0.26, 0.22, 0.18],
+                "ido":   [5,    6,    7,    8,    9,   10,   12],
+            },
+            "bulet-": {
+                "ertek": [0.70, 0.80, 0.95, 1.10, 1.30, 1.50, 1.80],
+                "ido":   [5,    6,    7,    8,    9,   10,   12],
+            },
+
+            # Fordulási sebesség fok / másodpercben.
+            "rotate+": {
+                "ertek": [120, 140, 160, 180, 210, 240, 280],
+                "ido":   [5,   6,   7,   8,   9,   10,  12],
+            },
+            "rotate-": {
+                "ertek": [85, 75, 65, 55, 45, 35, 25],
+                "ido":   [5,  6,  7,  8,  9,  10, 12],
+            },
+
+            # Pajzs: kisebb érték = kevesebb kapott sebzés.
+            "shild+": {
+                "ertek": [0.85, 0.78, 0.70, 0.62, 0.55, 0.48, 0.40],
+                "ido":   [5,    6,    7,    8,    9,   10,   12],
+            },
+            "shild-": {
+                "ertek": [1.15, 1.25, 1.35, 1.50, 1.65, 1.80, 2.00],
+                "ido":   [5,    6,    7,    8,    9,   10,   12],
+            },
+
+            # Sebesség: a jelenlegi += rendszerhez.
+            "speed+": {
+                "ertek": [40, 60, 80, 100, 130, 160, 200],
+                "ido":   [5,  6,  7,  8,   9,  10,  12],
+            },
+            "speed-": {
+                "ertek": [-35, -50, -70, -90, -120, -150, -190],
+                "ido":   [5,    6,   7,   8,    9,   10,   12],
+            },
+        }
+                
+
         self.nehezseg_atvalto = {
-            "Easy": 1,
-            "Normal": 2,
-            "Hard": 70,
-            "Nightmare": 80,
-            "Hell": 150,
+            "Easy": 3,
+            "Normal": 5,
+            "Hard": 7,
+            "Nightmare": 10,
+            "Hell": 20,
         }
 
 
+        self.utes_cooldown = 1
+
 class KorSeged:
     @staticmethod
-    def tavolsag(x1: float, y1: float, x2: float, y2: float) -> float:
+    def tavolsag(x1: float, y1: float, x2: float, y2: float) :
         return math.hypot(x2 - x1, y2 - y1)
 
     @staticmethod
-    def normalizal(dx: float, dy: float) -> Tuple[float, float]:
+    def normalizal(dx: float, dy: float):
         hossz = math.hypot(dx, dy)
         if hossz < 1e-6:
             return 0.0, 0.0
         return dx / hossz, dy / hossz
 
     @staticmethod
-    def korok_utkozne_e(x1: float, y1: float, r1: float, x2: float, y2: float, r2: float) -> bool:
+    def korok_utkozne_e(x1: float, y1: float, r1: float, x2: float, y2: float, r2: float):
         return math.hypot(x2 - x1, y2 - y1) < (r1 + r2)
 
     @staticmethod
-    def kulcs(racsok_nagysaga: int, x: float, y: float) -> Tuple[int, int]:
+    def kulcs(racsok_nagysaga: int, x: float, y: float):
         return int(x // racsok_nagysaga), int(y // racsok_nagysaga)
 
     @staticmethod
-    def szomszed_kulcsok(racsok_nagysaga: int, x: float, y: float, sugar: float, extra: int = 1) -> Iterable[Tuple[int, int]]:
+    def szomszed_kulcsok(racsok_nagysaga: int, x: float, y: float, sugar: float, extra: int = 1):
         cx, cy = KorSeged.kulcs(racsok_nagysaga, x, y)
         raszter = max(1, int(math.ceil(sugar / racsok_nagysaga))) + extra
         for rx in range(cx - raszter, cx + raszter + 1):
             for ry in range(cy - raszter, cy + raszter + 1):
                 yield rx, ry
 
+def ldtk_terkep_betoltes(fajl, szoba_nev=None, zoom=4):
+    with open(fajl, "r", encoding="utf-8") as f:
+        adat = json.load(f)
+
+    levelek = []
+
+    for world in adat.get("worlds", []):
+        levelek.extend(world.get("levels", []))
+
+    if not levelek:
+        levelek = adat.get("levels", [])
+
+    if szoba_nev:
+        level = next((l for l in levelek if l["identifier"] == szoba_nev), levelek[0])
+    else:
+        level = levelek[0]
+
+    platformok = []
+    rajz_retegek = []
+    platform_racs = {}
+    platform_racs_meret = 16
+
+    for layer in level["layerInstances"]:
+
+        # fizikai platformok
+        if layer["__identifier"] == "Collisions":
+            grid = layer["__gridSize"]
+            width = layer["__cWid"]
+            platform_racs_meret = grid
+
+            for index, value in enumerate(layer["intGridCsv"]):
+
+                # 1=dirt, 3=stone
+                if value not in (1, 3):
+                    continue
+
+                x = (index % width) * grid
+                y = (index // width) * grid
+
+                block = {"x": x, "y": y, "width": grid, "height": grid, "texture": [60, 60, 60]}
+                platformok.append(block)
+                platform_racs[(index % width, index // width)] = block
+
+    # grafikai rétegek alulról felfelé
+    for layer in reversed(level["layerInstances"]):
+
+        if layer["__identifier"] not in (
+            "Bg_textures",
+            "Collisions",
+            "Wall_shadows"
+        ):
+            continue
+
+        tiles = []
+
+        for tile in layer.get("autoLayerTiles", []):
+            tiles.append({
+                "x": tile["px"][0],
+                "y": tile["px"][1],
+                "src_x": tile["src"][0],
+                "src_y": tile["src"][1],
+                "flip": tile["f"],
+                "alpha": tile["a"]
+            })
+
+        rajz_retegek.append({
+            "nev": layer["__identifier"],
+            "tileset": os.path.basename(
+                layer.get("__tilesetRelPath") or ""
+            ),
+            "tile_meret": layer["__gridSize"],
+            "tiles": tiles
+        })
+
+    rajz_retegek = []
+
+    for layer in reversed(level["layerInstances"]):
+        tileset_path = layer.get("__tilesetRelPath")
+
+        if not tileset_path:
+            continue
+
+        tileok = []
+
+        for tile in layer.get("autoLayerTiles", []) + layer.get("gridTiles", []):
+            tileok.append({
+                "x": tile["px"][0] + layer.get("__pxTotalOffsetX", 0),
+                "y": tile["px"][1] + layer.get("__pxTotalOffsetY", 0),
+
+                # honnan vágja ki a tilesetből
+                "src_x": tile["src"][0],
+                "src_y": tile["src"][1],
+
+                "tile_id": tile["t"],
+                "flip": tile["f"],
+                "alpha": tile["a"]
+            })
+
+        rajz_retegek.append({
+            "nev": layer["__identifier"],
+            "texture": os.path.basename(tileset_path),
+            "tile_meret": layer["__gridSize"],
+            "opacity": layer.get("__opacity", 1.0),
+            "tileok": tileok
+        })
+
+    
+
+    return {
+        "szoba": level["identifier"],
+        "width": level["pxWid"],
+        "height": level["pxHei"],
+        "hatter_szin": level["__bgColor"],
+
+        "platformok": platformok,
+        "platform_racs": platform_racs,
+        "platform_racs_meret": platform_racs_meret,
+        "rajz_retegek": rajz_retegek,
+
+        # a jelenlegi kódod ezt is várja:
+        "ground": [],
+        "portok": [],
+    }
 
 class SzinSeged:
     @staticmethod
-    def veletlen_szin() -> Tuple[int, int, int]:
+    def veletlen_szin():
         return random.randint(20, 255), random.randint(20, 255), random.randint(20, 255)
 
     @staticmethod
-    def fej_szin(szin: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    def fej_szin(szin):
         return min(255, szin[0] + 40), min(255, szin[1] + 40), min(255, szin[2] + 40)
 
+class Chest:
+    def __init__(self, azonosito: str, x: float, y: float, beallitasok: Beallitasok, cellax, cellay, vilag):
+        self.azonosito = azonosito
+        self.x = x
+        self.y = y
+        self.cella_x = cellax
+        self.cella_y = cellay
+        self.hp = 1
+        self.kincs = random.choice(beallitasok.chest_kincsek)
+        self.alap_kep = self.kincs[0]
+        valasztas = random.randint(1, 2)
+        self.buff = self.kincs[valasztas]
+        ertek = beallitasok.buff_ertekek.get(self.buff).get("ertek")
+        self.ertek = random.choice(ertek) if self.buff != "teleport" else vilag
+        ido = beallitasok.buff_ertekek.get(self.buff).get("ido")
+        self.ido = random.choice(ido)
+        self.el = True
+        self.kincs_lathato = False
+        self.pajzs = 1
+        self.sugar = beallitasok.buffok_szelesege // 2 + 5
+
+    def allapot_dict(self):
+        return {
+            "azonosito": self.azonosito,
+            "x": self.x,
+            "y": self.y,
+            "kincs_fajta": self.alap_kep,
+            "kincs": self.buff,
+        }
 
 class Tanki:
     def __init__(self, azonosito: str, nev: str, szin: Tuple[int, int, int], x: float, y: float, beallitasok: Beallitasok):
-        self.azonosito = azonosito  # A hálózati vagy helyi játékos egyedi azonosítója.
-        self.nev = nev  # A játékos megjelenített neve.
-        self.szin = szin  # A játékos köreinek rajzolási színe.
-        self.x = x  # A játékos közeppontjának világkoordinátás X helye.
-        self.y = y  # A játékos közeppontjának világkoordinátás Y helye.
-        self.sugar = beallitasok.jatekos_sugar  # A tankos játékos ütközési sugara.
-        self.sebesseg = beallitasok.jatekos_sebesseg  # A tankos játékos mozgási sebessége.
-        self.hp = beallitasok.jatekos_hp  # A tankos játékos aktuális életereje.
-        self.el = True  # Jelzi, hogy a tankos játékos életben van-e.
-        self.mozog_balra = False  # A bal irányú mozgás szándékát tárolja.
-        self.mozog_jobbra = False  # A jobb irányú mozgás szándékát tárolja.
-        self.mozog_fel = False  # A felfelé mozgás szándékát tárolja.
-        self.mozog_le = False  # A lefelé mozgás szándékát tárolja.
+        self.azonosito = azonosito
+        self.nev = nev 
+        self.szin = szin 
+        self.x = x 
+        self.y = y 
+        self.sugar = beallitasok.jatekos_sugar
+        self.sebesseg = beallitasok.jatekos_sebesseg
+        self.alap_sebesseg = self.sebesseg
+        self.alap_hp = float(beallitasok.jatekos_hp)
+        self.hp = self.alap_hp
+        self.el = True 
+        self.mozog_balra = False 
+        self.mozog_jobbra = False 
+        self.mozog_fel = False
+        self.mozog_le = False 
         self.loves = False
-        self.loves_cooldown = 1.05#beallitasok.loves_cooldown
-        self.loves_idozito = 0.05#beallitasok.loves_cooldown - 0.3 # ez számolja hogy hány frame telt el az utso lövestöl
+        self.tuzelt = False
+        self.loves_cooldown = beallitasok.loves_cooldown
+        self.loves_idozito = beallitasok.loves_cooldown -0.3
+        self.loves_cooldown_alap = self.loves_cooldown
         self.eltelt_ido = 0.0
         self.fok = random.randint(1, 360)
         self.fordulasi_sebesseg = 100
+        self.fordulasi_sebesseg_alap = self.fordulasi_sebesseg
         self.utolso_racs = None
-        self.tank_kep_nev = ""
+        self.tank_kep_nev = random.choice(beallitasok.tank_kepek)
         self.jatekos_e = False
         self.gondolkozasi_ido = 5
         self.olesek = 0
+        self.olesek_elteres = 0
         self.talalatok = 0
+        self.jaror_cel_kordinata = None
+        self.alapot = "jarorozes"
+        self.jarorozes_figyelo = {"kordinata": None, "ido": 0.0, "jelenleg": 0}
+        self.dontes_fazis = 0
+        self.dontes_gyakorisag = beallitasok.dontes_gyakorisag
+        self.dontes_idozito = 0
+        self.buff_gyujto = {} #{delta ido, cel ido, buff definicio, ertek, buff neve, buff fajtaja, el = True/False}
+        self.uj_buffok = {} # buff neve : [cél idő, ertek, meddig lesz a buff érvényes]
+        self.buff_gyujto_torlo_lista = []
+        self.buff_kijelzes_felszedeskor_ido = beallitasok.buff_kijelzes_felszedeskor_ido
+        self.pajzs = 1.0
+        self.alap_pajzs = 1.0
 
     def tuzeles(self, delta_ido):
         self.loves_idozito += delta_ido
@@ -145,8 +399,8 @@ class Tanki:
             return True
         return False
 
-    def allapot_dict(self) -> dict:
-        return {
+    def allapot_dict(self):
+        alapot = {
             "azonosito": self.azonosito,
             "nev": self.nev,
             "szin": self.szin,
@@ -160,7 +414,400 @@ class Tanki:
             "kep": self.tank_kep_nev,
             "olesek": self.olesek,
             "pontok": self.talalatok,
+            "max_hp": self.alap_hp,
+            "tuzelt": self.tuzelt,
+            "uj_buffok": self.uj_buffok,
+
+            "buffok": [
+                {
+                    "nev": buff["buff_nev"],
+                    "ertek": buff["ertek"],
+                    "eltelt_ido": buff["delta_ido"],
+                    "cel_ido": buff["cel_ido"],
+                }
+                for buff in self.buff_gyujto.values() if buff.get("el", True) and buff.get("cel_ido", 0) > 0
+            ],
         }
+        self.tuzelt = False
+        self.uj_buffok = {}
+        return alapot
+    
+    def buff_kezelo(self, delta_ido):
+        torlendo = []
+
+        for kulcs, buff in self.buff_gyujto.items():
+            buff["delta_ido"] += delta_ido
+
+            if buff["delta_ido"] >= buff["cel_ido"]:
+                buff["buff_definicio"](self, buff["ertek"], vissza_allitas=True)
+                torlendo.append(kulcs)
+
+        for kulcs in torlendo:
+            del self.buff_gyujto[kulcs]
+
+
+    def buff_hozzaadasa(self, buff_nev, buff_definicio, ertek=None, cel_ido=None):
+        if not cel_ido or cel_ido <= 0:
+            buff_definicio(self, ertek)
+            self.uj_buffok[buff_nev] = [self.buff_kijelzes_felszedeskor_ido, ertek, None]
+            return
+
+        
+        kulcs = buff_nev[:-1] if buff_nev.endswith(("+", "-")) else buff_nev
+
+        regi_buff = self.buff_gyujto.get(kulcs)
+
+        if regi_buff is not None:
+            regi_buff["buff_definicio"](self, regi_buff["ertek"], vissza_allitas=True)
+
+        
+        buff_definicio(self, ertek)
+        self.uj_buffok[buff_nev] = [self.buff_kijelzes_felszedeskor_ido, ertek, cel_ido]
+
+        self.buff_gyujto[kulcs] = {
+            "delta_ido": 0.0,
+            "cel_ido": cel_ido,
+            "buff_definicio": buff_definicio,
+            "ertek": ertek,
+            "buff_nev": buff_nev,
+            "el": True,
+        }
+        
+class Buffok:
+    @staticmethod
+    def hp(self, hp, vissza_allitas=False):
+        self.hp += hp * self.pajzs
+        self.hp = round(self.hp, 2)
+        if self.hp <= 0:
+            self.el = False
+        
+    @staticmethod
+    def shild(self, vedes, vissza_allitas=False):
+        if vissza_allitas:
+            self.pajzs = self.alap_pajzs
+            return
+        self.pajzs = vedes
+    @staticmethod
+    def speed(self, sebesseg, vissza_allitas=False):
+        if vissza_allitas:
+            self.sebesseg = self.alap_sebesseg
+            return
+        self.sebesseg = self.alap_sebesseg + sebesseg
+    
+    @staticmethod
+    def bulet(self, coldown, vissza_allitas=False):
+        if vissza_allitas:
+            self.loves_cooldown = self.loves_cooldown_alap
+            return
+        self.loves_cooldown = coldown
+
+    @staticmethod
+    def rotate(self, sebesseg,  vissza_allitas=False):
+        if vissza_allitas:
+            self.fordulasi_sebesseg = self.fordulasi_sebesseg_alap
+            return
+        self.fordulasi_sebesseg = sebesseg
+
+    @staticmethod
+    def kill(self, oles, vissza_allitas=False):
+        if vissza_allitas:
+            self.olesek -= self.olesek_elteres
+            self.olesek_elteres = 0
+        self.olesek += oles
+        self.olesek_elteres += 1
+
+    @staticmethod
+    def teleport(self, vilag, vissza_allitas=False):
+        self.x, self.y = vilag._tankos_spawn_pozicio()
+
+class Platform:
+    def __init__(self, x, y, sebzes=0, fajta="alap"):
+        pass
+
+class Vector:
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
+
+    def __add__(self, masik):
+        return Vector(self.x + masik.x, self.y + masik.y)
+
+    def __sub__(self, masik):
+        return Vector(self.x - masik.x, self.y - masik.y)
+
+    def __mul__(self, szam):
+        return Vector(self.x * szam, self.y * szam)
+
+    def __iadd__(self, masik):
+        self.x += masik.x
+        self.y += masik.y
+        return self
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self.x
+        if index == 1:
+            return self.y
+        raise IndexError("A vector indexe csak 0 vagy 1 lehet!")
+
+    def __repr__(self):
+        return f"Vector2({self.x}, {self.y})"
+    
+class P_elolenyek:
+    def __init__(self, azonosito: str, nev: str, x: float, y: float, sugar, k_magassag: int, k_szelleseg: int, beallitasok: Beallitasok):
+        self.azonosito = azonosito
+        self.nev = nev 
+        self.x = x 
+        self.y = y 
+        self.sugar = sugar
+        self.width = 40
+        self.height = 50
+        self.sebesseg = beallitasok.jatekos_sebesseg
+        self.alap_sebesseg = self.sebesseg
+        self.alap_hp = float(beallitasok.jatekos_hp)
+        self.hp = self.alap_hp
+        self.el = True 
+        self.mozog_balra = False 
+        self.mozog_jobbra = False 
+        self.mozog_fel = False
+        self.mozog_le = False 
+        self.utes = False
+        self.tuzelt = False
+        self.jump = False
+        self.utes_cooldown = beallitasok.utes_cooldown
+        self.utes_idozito = beallitasok.utes_cooldown -0.3
+        self.utes_cooldown_alap = self.utes_cooldown-0.5
+        self.eltelt_ido = 0.0
+        self.utolso_racs = None
+        self.tank_kep_nev = random.choice(beallitasok.tank_kepek)
+        self.jatekos_e = False
+        self.gondolkozasi_ido = 5
+        self.olesek = 0
+        self.talalatok = 0
+        self.dontes_fazis = 0
+        self.dontes_gyakorisag = beallitasok.dontes_gyakorisag
+        self.dontes_idozito = 0
+        self.buff_gyujto = {} #{delta ido, cel ido, buff definicio, ertek, buff neve, buff fajtaja, el = True/False}
+        self.uj_buffok = {} # buff neve : [cél idő, ertek, meddig lesz a buff érvényes]
+        self.buff_gyujto_torlo_lista = []
+        self.buff_kijelzes_felszedeskor_ido = beallitasok.buff_kijelzes_felszedeskor_ido
+        self.pajzs = 1.0
+        self.alap_pajzs = 1.0
+        self.jumping = 0
+        self.jumping_szamlalo = 0
+        self.dare_i_jump = True
+        self.can_i_jump = False
+        self.irany = 0 # 0=elsö nezet állás, 1 jobbra oldalso nezet, 2 balra oldalsonezet, 3 fel első nézet, 4 le also nezet
+
+        #['Dying', 'Falling Down', 'Hurt', 'Idle', 'Idle Blinking', 'Jump Loop', 'Jump Start', 'Kicking', 'Run Slashing', 'Run Throwing',
+        #'Running', 'Slashing', 'Slashing in The Air', 'Sliding', 'Throwing', 'Throwing in The Air', 'Walking']
+        self.akcio = "Idle"
+        self.irany = 1
+        self.kamera  = None
+        self.k_szelesseg = k_szelleseg #screen width
+        self.k_magassag = k_magassag
+
+        self.pos = Vector(x, y)
+        self.vel = Vector(0, 0)
+        self.acc = Vector(0, 0)
+
+    def tamadas(self, delta_ido):
+            self.utes_idozito += delta_ido
+            if self.utes_idozito >= self.utes_cooldown and self.utes:
+                self.utes_idozito = 0
+                self.utes = False
+                return True
+            return False
+
+    def allapot_dict(self):
+        alapot = {
+            "azonosito": self.azonosito,
+            "nev": self.nev,
+            "x": self.x,
+            "y": self.y,
+
+            "width": self.width,
+            "height": self.height,
+            "sugar": self.sugar,
+            "irany": self.irany,
+            "hp": self.hp,
+            "el": self.el,
+            "eltelt_ido": self.eltelt_ido,
+            "kep": self.tank_kep_nev,
+            "olesek": self.olesek,
+            "pontok": self.talalatok,
+            "max_hp": self.alap_hp,
+            "tuzelt": self.tuzelt,
+            "uj_buffok": self.uj_buffok,
+            "akcio": self.akcio,
+            "irany": self.irany,
+
+            "buffok": [
+                {
+                    "nev": buff["buff_nev"],
+                    "ertek": buff["ertek"],
+                    "eltelt_ido": buff["delta_ido"],
+                    "cel_ido": buff["cel_ido"],
+                }
+                for buff in self.buff_gyujto.values() if buff.get("el", True) and buff.get("cel_ido", 0) > 0
+            ],
+        }
+        self.tuzelt = False
+        self.uj_buffok = {}
+        return alapot
+    
+    def buff_kezelo(self, delta_ido):
+        torlendo = []
+
+        for kulcs, buff in self.buff_gyujto.items():
+            buff["delta_ido"] += delta_ido
+
+            if buff["delta_ido"] >= buff["cel_ido"]:
+                buff["buff_definicio"](self, buff["ertek"], vissza_allitas=True)
+                torlendo.append(kulcs)
+
+        for kulcs in torlendo:
+            del self.buff_gyujto[kulcs]
+
+
+    def buff_hozzaadasa(self, buff_nev, buff_definicio, ertek=None, cel_ido=None):
+        if not cel_ido or cel_ido <= 0:
+            buff_definicio(self, ertek)
+            self.uj_buffok[buff_nev] = [self.buff_kijelzes_felszedeskor_ido, ertek, None]
+            return
+
+        
+        kulcs = buff_nev[:-1] if buff_nev.endswith(("+", "-")) else buff_nev
+
+        regi_buff = self.buff_gyujto.get(kulcs)
+
+        if regi_buff is not None:
+            regi_buff["buff_definicio"](self, regi_buff["ertek"], vissza_allitas=True)
+
+        
+        buff_definicio(self, ertek)
+        self.uj_buffok[buff_nev] = [self.buff_kijelzes_felszedeskor_ido, ertek, cel_ido]
+
+        self.buff_gyujto[kulcs] = {
+            "delta_ido": 0.0,
+            "cel_ido": cel_ido,
+            "buff_definicio": buff_definicio,
+            "ertek": ertek,
+            "buff_nev": buff_nev,
+            "el": True,
+        }
+        
+"""class Kamera:
+    def __init__(self, x, y, k_szelesseg, k_magassag):
+        self.kepernyo_valtoztatas(x, y, k_szelesseg, k_magassag)
+        self.vel = Vector(0, 0)
+        self.tavolsag = Vector(0, 0)
+
+    def kepernyo_valtoztatas(self, x, y, k_szelesseg, k_magassag):
+        self.rect = {
+            "x": x+k_szelesseg//2,
+            "y": y+k_magassag//2,
+            "width": k_szelesseg-300,
+            "height": k_magassag-200
+        }
+
+    def mozgas(self, x, y, width, hight):
+        k_x, k_y, k_w, K_h = self.rect.get("x"), self.rect.get("y"), self.rect.get("width"), self.rect.get("height")
+        self.tavolsag.x = self.tavolsag.x + x
+        self.tavolsag.y = self.tavolsag.y + y
+
+
+        "if not (k_x < x < k_x + k_w):
+            self.vel.x += 2
+        elif not (k_x < x + width < k_x + k_w):
+            self.vel.x -= 2
+        if  not (k_y < y < k_y + K_h):
+            self.vel.y += 2
+        elif  not (k_y < y + hight < k_y + K_h):
+            self.vel.y -= 2"
+
+
+
+        if self.tavolsag.x < -30:
+            self.vel.x = max(self.vel.x + 2, 2)
+        elif self.tavolsag.x > 30:
+            self.vel.x = min(self.vel.x - 2, -2)
+
+        if self.tavolsag.y < 30:
+            self.vel.y = max(self.vel.y + 2, 4)
+        elif self.tavolsag.y > -30:
+            self.vel.y = min(self.vel.y - 2, -4)
+
+    def frissites(self):
+        self.rect["x"] = self.rect.get("x") + self.vel.x
+        self.rect["y"] = self.rect.get("y") + self.vel.y
+"""
+class Kamera:
+    def __init__(self, kepernyo_szelesseg, kepernyo_magassag):
+        self.x = 0
+        self.y = 0
+        self.kepernyo_szelesseg = kepernyo_szelesseg
+        self.kepernyo_magassag = kepernyo_magassag
+
+        
+        self.holtter_szelesseg = 150  
+        self.holtter_magassag = 200   
+        
+       
+        self.fokusz_x = 0
+        self.fokusz_y = 0
+        self.elso_frissites = True   
+        
+        self.kovetes_sebesseg_x = 0.08
+        self.kovetes_sebesseg_y = 0.2
+        self.eloretekintes_tavolsag = 0#150
+        self.jelenlegi_eloretekintes = 0
+
+    def mozgas(self, jatekos_x, jatekos_y, jatekos_szelesseg, jatekos_magassag, irany):
+        # A játékos tényleges közepe
+        jatekos_kozep_x = jatekos_x + (jatekos_szelesseg / 2) + self.kepernyo_szelesseg / 2
+        jatekos_kozep_y = jatekos_y + (jatekos_magassag / 2) + self.kepernyo_magassag / 2
+        
+        
+        if self.elso_frissites:
+            self.fokusz_x = jatekos_kozep_x
+            self.fokusz_y = jatekos_kozep_y
+            self.elso_frissites = False
+
+        
+        bal_hatar = self.fokusz_x - (self.holtter_szelesseg / 2)
+        jobb_hatar = self.fokusz_x + (self.holtter_szelesseg / 2)
+        
+        if jatekos_kozep_x < bal_hatar:
+            self.fokusz_x -= (bal_hatar - jatekos_kozep_x) 
+        elif jatekos_kozep_x > jobb_hatar:
+            self.fokusz_x += (jatekos_kozep_x - jobb_hatar) 
+            
+        
+        felso_hatar = self.fokusz_y - (self.holtter_magassag / 2)
+        also_hatar = self.fokusz_y + (self.holtter_magassag / 2)
+        
+        if jatekos_kozep_y < felso_hatar:
+            self.fokusz_y -= (felso_hatar - jatekos_kozep_y)
+        elif jatekos_kozep_y > also_hatar:
+            self.fokusz_y += (jatekos_kozep_y - also_hatar)
+
+        
+        cel_eloretekintes = irany * self.eloretekintes_tavolsag
+        self.jelenlegi_eloretekintes += (cel_eloretekintes - self.jelenlegi_eloretekintes) * 0.05
+        
+       
+        cel_kamera_x = (self.fokusz_x - self.kepernyo_szelesseg / 2) + self.jelenlegi_eloretekintes
+        cel_kamera_y = (self.fokusz_y - self.kepernyo_magassag / 2)
+
+        
+        self.x += (cel_kamera_x - self.x) * self.kovetes_sebesseg_x
+        self.y += (cel_kamera_y - self.y) * self.kovetes_sebesseg_y
+
+
+    def apply(self):
+        return self.x, self.y
+
 
 class Lovedek:
     def __init__(self, azonosito, tulajdonos_id, x, y, irany_x, irany_y):
@@ -172,7 +819,7 @@ class Lovedek:
         self.irany_y = irany_y
         self.sebesseg = 700
         self.sugar = 6
-        self.sebzes = 1
+        self.sebzes = 10
         self.patanas_db = 0.0
         self.max_patanas = 1.0
         self.utolso_racs = None
@@ -208,38 +855,38 @@ class Lovedek:
 
 class KigyoAdat:
     def __init__(self, azonosito: str, nev: str, szin: Tuple[int, int, int], nehezseg_szint: str, fej_x: float, fej_y: float, beallitasok: Beallitasok, jatekos_e: bool = False):
-        self.azonosito = azonosito  # A kígyó egyedi azonosítója, szerveren vagy kliensen ezzel különböztetjük meg.
-        self.nev = nev  # A kígyó megjelenített neve.
-        self.szin = szin  # A kígyó testszíne.
-        self.fej_szin = SzinSeged.fej_szin(szin)  # A kígyó fejének kiemelt színe.
-        self.nehezseg_szint = nehezseg_szint  # A kígyóhoz tartozó nehézségi profil neve.
-        self.jatekos_e = jatekos_e  # Jelzi, hogy emberi vagy AI vezérelt kígyóról van-e szó.
-        self.el = True  # Jelzi, hogy a kígyó él-e.
-        self.olesek = 0  # A kígyó által szerzett ölések száma.
-        self.alma_pontok = 0  # Az elfogyasztott almák száma.
-        self.sugar = beallitasok.kigyó_sugár  # A kígyó minden testpontjának sugara.
-        self.resz_tav = beallitasok.kigyo_resz_tav  # A kígyótest ideális követési távolsága.
-        self.irany_x = 1.0  # A kígyó aktuális vízszintes mozgásiránya.
-        self.irany_y = 0.0  # A kígyó aktuális függőleges mozgásiránya.
-        self.alap_sebesseg = 7.0  # A kígyó alap mozgási sebessége a nehézség szerint.
-        self.sebesseg = 7.0  # Az aktuális sebesség, gyorsítás idején eltérhet az alaptól.
-        self.cel_sebesseg = 7.0  # A fokozatos gyorsuláshoz használt célsebesség.
-        self.no = beallitasok.kigyo_no  # Ennyi növekedési egység után nő egy testponttal.
-        self.nosz = 0  # Az összegyűjtött növekedési egységek száma.
+        self.azonosito = azonosito 
+        self.nev = nev 
+        self.szin = szin  
+        self.fej_szin = SzinSeged.fej_szin(szin) 
+        self.nehezseg_szint = nehezseg_szint 
+        self.jatekos_e = jatekos_e 
+        self.el = True 
+        self.olesek = 0
+        self.alma_pontok = 0
+        self.sugar = beallitasok.kigyó_sugár
+        self.resz_tav = beallitasok.kigyo_resz_tav
+        self.irany_x = 1.0
+        self.irany_y = 0.0 
+        self.alap_sebesseg = 7.0 
+        self.sebesseg = 7.0
+        self.cel_sebesseg = 7.0 
+        self.no = beallitasok.kigyo_no 
+        self.nosz = 0 
         if not jatekos_e and beallitasok.kezdes:
             self.nosz = random.randint(5, 200)
-        self.osztas = 2  # A régi logikából megőrzött ideális követési mintavétel.
-        self.aktualis_osztas = 2.0  # A fokozatos sebességváltás kisimítására használt változó.
-        self.idealis_tavolsag = float(self.resz_tav)  # A testkövetés cél-távolsága.
-        self.utvonal = []  # A fej korábbi pontjai, ebből követik a testrészek az előzőt.
-        self.test_pontok = []  # A kígyó összes testpontja világkoordinátában.
-        self.dontes_idozito = 0  # Az AI újratervezésének időzítője.
-        self.dontes_gyakorisag = beallitasok.dontes_gyakorisag  # Ennyi frissítésenként számol új AI irányt.
-        self.allapot = "vadaszat"  # A jelenlegi AI állapot neve.
-        self.celpont = None  # Az AI által célba vett pozíció.
-        self.csapda_mod = False  # Fenntartott állapot a későbbi bekerítő viselkedéshez.
-        self.szerep = "uldozo"  # Hell nehézségnél kiosztott szerepkör.
-        self.gyorsit = False  # Emberi kígyónál jelzi, hogy gyorsítás aktív-e.
+        self.osztas = 2 
+        self.aktualis_osztas = 2.0
+        self.idealis_tavolsag = float(self.resz_tav)
+        self.utvonal = []
+        self.test_pontok = [] 
+        self.dontes_idozito = 0 
+        self.dontes_gyakorisag = beallitasok.dontes_gyakorisag 
+        self.allapot = "vadaszat"
+        self.celpont = None
+        self.csapda_mod = False
+        self.szerep = "uldozo" 
+        self.gyorsit = False 
         self.utolso_racs = []
         self.dontes_fazis = 0
         self.beallitasok = beallitasok
@@ -247,7 +894,7 @@ class KigyoAdat:
         self.eltelt_ido = 0
         
 
-        self._nehezseg_beallitas(nehezseg_szint, beallitasok)
+        self._nehezseg_beallitas(nehezseg_szint)
         self._letrehoz_indulo_test(fej_x, fej_y, beallitasok)
         self.novekedes(self.beallitasok)
     
@@ -260,7 +907,7 @@ class KigyoAdat:
                 del self.test_pontok[-1]
             return True
 
-    def _nehezseg_beallitas(self, nehezseg_szint: str, beallitasok: Beallitasok) -> None:
+    def _nehezseg_beallitas(self, nehezseg_szint) :
         if nehezseg_szint == "Easy":
             self.alap_sebesseg = 5.0 * self.beallitasok.fps
         elif nehezseg_szint == "Normal":
@@ -280,7 +927,7 @@ class KigyoAdat:
         self.osztas = max(1, round(self.idealis_tavolsag / max(1.0, self.alap_sebesseg)))
         self.aktualis_osztas = float(self.osztas)
 
-    def _letrehoz_indulo_test(self, fej_x: float, fej_y: float, beallitasok: Beallitasok) -> None:
+    def _letrehoz_indulo_test(self, fej_x: float, fej_y: float, beallitasok: Beallitasok) :
         self.test_pontok = []
         if self.jatekos_e:
             for index in range(beallitasok.kigyo_alap_hossz):
@@ -290,23 +937,23 @@ class KigyoAdat:
                 self.test_pontok.append([fej_x - index * self.idealis_tavolsag, fej_y])
         self.utvonal = [list(self.test_pontok[0])]
 
-    def novekedes(self, beallitasok: Beallitasok) -> None:
+    def novekedes(self, beallitasok: Beallitasok) :
         self.nosz += beallitasok.kigyo_novekedes_alma_db
         cel_hossz = beallitasok.kigyo_alap_hossz + (self.nosz // self.no)
         while len(self.test_pontok) < cel_hossz:
             utolso_x, utolso_y = self.test_pontok[-1]
             self.test_pontok.append([utolso_x, utolso_y])
 
-    def beallit_irany(self, dx: float, dy: float) -> None:
+    def beallit_irany(self, dx, dy) :
         ndx, ndy = KorSeged.normalizal(dx, dy)
         if abs(ndx) > 1e-6 or abs(ndy) > 1e-6:
             self.irany_x = ndx
             self.irany_y = ndy
 
-    def fej_pozicio(self) -> Tuple[float, float]:
+    def fej_pozicio(self):
         return self.test_pontok[0][0], self.test_pontok[0][1]
 
-    def allapot_dict(self, kamera_x: Optional[float] = None, kamera_y: Optional[float] = None, szelesseg: Optional[int] = None, magassag: Optional[int] = None, puffer: float = 100.0, pont_limit: Optional[int] = None) -> dict:
+    def allapot_dict(self, kamera_x = None, kamera_y = None, szelesseg = None, magassag = None, puffer = 100.0, pont_limit = None):
         pontok = self.test_pontok
         if kamera_x is not None and kamera_y is not None and szelesseg is not None and magassag is not None:
             bal = kamera_x - puffer
@@ -333,7 +980,7 @@ class KigyoAdat:
             "eltelt_ido": self.eltelt_ido
         }
 
-    def allapot_dict_kicsi(self) -> dict:
+    def allapot_dict_kicsi(self):
         fej_x, fej_y = self.fej_pozicio()
 
         return {
@@ -348,44 +995,46 @@ class KigyoAdat:
         }
 
 class Tank_Terkep:
+
     """
-    -  1 = fal
-    -  0 = járható padló
-    -  2 = víz (járható)
-    - -1 = kijárat (lépcső / vissza a kastélyba)
-    -  3 = repedezett fal (NEM járható)
-    -  4 = lyuk a falban (JÁRHATÓ)
+     1 = fal
+     0 = járható padló
+     2 = víz (járható)
+    -1 = kijárat (lépcső / vissza a kastélyba)
+     3 = repedezett fal (NEM járható)
+     4 = lyuk a falban (JÁRHATÓ)
     """
 
-    def __init__(self, szel=500, mag=500, cella=80, seed=None, rooms_target=None):
+    def __init__(self, vilag, szel=500, mag=500, cella=80, seed=None, rooms_target=None, beallitasok = Beallitasok()):
         self.SZEL = int(szel)
         self.MAG = int(mag)
         self.CELLA = int(cella)
+        self.beallitasok = beallitasok
+        self.vilag = vilag
+
+        self.chest_azonosito = 0
+
+        self.chest_racs = defaultdict(set)
 
         if seed is None:
             seed = random.randrange(1 << 30)
         self.seed = int(seed)
-        rng = random.Random(self.seed)
+        self.rng = random.Random(self.seed)
 
-        # --- A NUMPY MÁTRIX ---
-        # 1-esekkel (fal) feltöltött mátrix int8 típussal
         self.racs = np.ones((self.MAG, self.SZEL), dtype=np.int8)
 
-        # Színek (a szöveges kulcsokat számokra cseréltük a NumPy miatt)
         self.szinek = {
             1: "#1a1a1a",   # fal
             0: "#c9b37e",   # padló
             2: "#0043ec",   # víz
             -1: "#1100ff",  # kijárat
-            3: "#464040",   # repedes_fal (nem járható)
-            4: "#692F28",   # lyuk_fal (járható)
+            3: "#464040",   # repedes_fal
+            4: "#692F28",   # lyuk_fal 
         } 
-
         self.rooms = []
 
 
         def carve_rect(s1, o1, s2, o2, val=0):
-            """Szupergyors NumPy szeletelés a for ciklusok helyett."""
             r1 = max(0, min(self.MAG - 1, int(s1)))
             c1 = max(0, min(self.SZEL - 1, int(o1)))
             r2 = max(0, min(self.MAG - 1, int(s2)))
@@ -393,7 +1042,6 @@ class Tank_Terkep:
             if r2 < r1: r1, r2 = r2, r1
             if c2 < c1: c1, c2 = c2, c1
             
-            # Kijelölt terület felülírása egy lépésben
             self.racs[r1:r2+1, c1:c2+1] = val
 
         def room_center(room):
@@ -407,23 +1055,20 @@ class Tank_Terkep:
 
         
         generalas_cfg = {}
-        try:
-            import os, json
-            fajl = os.path.join(os.path.dirname(__file__), "terkep.json")
-            if os.path.exists(fajl):
-                with open(fajl, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                generalas_cfg = (cfg.get("vilagok", {}) or {}).get("pince", {}).get("generalas", {}) or {}
-        except Exception:
-            generalas_cfg = {}
+        fajl = os.path.join(os.path.dirname(__file__), "terkep.json")
+        if os.path.exists(fajl):
+            with open(fajl, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            generalas_cfg = (cfg.get("vilagok", {}) or {}).get("tankos", {}).get("generalas", {}) or {}
+        
 
         folyosomin = int(generalas_cfg.get("folyoso_min_szelesseg", 1))
         folyosomax = int(generalas_cfg.get("folyoso_max_szelesseg", 4))
         zsakutca_db = int(generalas_cfg.get("zsakutcak", 120))
 
-        folyosomin = max(1, min(12, folyosomin))
-        folyosomax = max(folyosomin, min(14, folyosomax))
-        zsakutca_db = max(10, min(900, zsakutca_db))
+        folyosomin = max(1,  folyosomin)
+        folyosomax = max(folyosomin, folyosomax)
+        zsakutca_db = max(10, zsakutca_db)
 
         def _farag_pont(s, o, szelesseg):
             w = max(1, int(szelesseg))
@@ -433,7 +1078,7 @@ class Tank_Terkep:
         def alagut_random_walk(s0, o0, s1, o1, szel_min, szel_max):
             s, o = int(s0), int(o0)
             cel_s, cel_o = int(s1), int(o1)
-            szel = rng.randint(szel_min, szel_max)
+            szel = self.rng.randint(szel_min, szel_max)
             max_lepes = max(2000, (abs(cel_s - s) + abs(cel_o - o)) * 15)
             
             for _ in range(max_lepes):
@@ -441,24 +1086,24 @@ class Tank_Terkep:
                 if s == cel_s and o == cel_o:
                     break
 
-                if rng.random() < 0.22:
-                    szel += rng.choice([-1, 1])
+                if self.rng.random() < 0.22:
+                    szel += self.rng.choice([-1, 1])
                     szel = max(szel_min, min(szel_max, szel))
 
                 ds = cel_s - s
                 do = cel_o - o
                 iranyok = []
                 
-                if rng.random() < 0.70:
+                if self.rng.random() < 0.70:
                     if abs(ds) >= abs(do):
                         iranyok.append((1 if ds > 0 else -1, 0))
                         if do != 0: iranyok.append((0, 1 if do > 0 else -1))
                     else:
                         iranyok.append((0, 1 if do > 0 else -1))
                         if ds != 0: iranyok.append((1 if ds > 0 else -1, 0))
-                    iranyok += rng.sample([(0, 1), (0, -1), (1, 0), (-1, 0)], k=2)
+                    iranyok += self.rng.sample([(0, 1), (0, -1), (1, 0), (-1, 0)], k=2)
                 else:
-                    iranyok = rng.sample([(0, 1), (0, -1), (1, 0), (-1, 0)], k=4)
+                    iranyok = self.rng.sample([(0, 1), (0, -1), (1, 0), (-1, 0)], k=4)
 
                 lepett = False
                 for d_s, d_o in iranyok:
@@ -494,17 +1139,16 @@ class Tank_Terkep:
                 tavok.sort(key=lambda t: t[0])
                 if tavok:
                     _osszekot(i, tavok[0][1])
-                if len(tavok) > 1 and rng.random() < 0.75:
+                if len(tavok) > 1 and self.rng.random() < 0.75:
                     _osszekot(i, tavok[1][1])
 
             extra = max(6, len(self.rooms) // 5)
             for _ in range(extra):
-                a = rng.randrange(len(self.rooms))
-                b = rng.randrange(len(self.rooms))
+                a = self.rng.randrange(len(self.rooms))
+                b = self.rng.randrange(len(self.rooms))
                 _osszekot(a, b)
 
         def _zsakutcak_hozzaadasa(db):
-            # Szupergyors NumPy keresés a padlókon (0)
             yy, xx = np.where(self.racs[2:self.MAG-2, 2:self.SZEL-2] == 0)
             padlok = list(zip(yy + 2, xx + 2))
             
@@ -514,7 +1158,6 @@ class Tank_Terkep:
                 ir = []
                 for ds, do in [(1,0),(-1,0),(0,1),(0,-1)]:
                     ns, no = s+ds, o+do
-                    # self.racs[ns, no] forma NumPyhoz!
                     if 1 <= ns < self.MAG-1 and 1 <= no < self.SZEL-1 and self.racs[ns, no] == 1:
                         ir.append((ds, do))
                 return ir
@@ -524,13 +1167,13 @@ class Tank_Terkep:
             kesz = 0
             while kesz < db and probalkozas < max_probalkozas:
                 probalkozas += 1
-                s, o = padlok[rng.randrange(len(padlok))]
+                s, o = padlok[self.rng.randrange(len(padlok))]
                 iranyok = fal_szomszedok(s, o)
                 if not iranyok: continue
-                ds, do = iranyok[rng.randrange(len(iranyok))]
+                ds, do = iranyok[self.rng.randrange(len(iranyok))]
 
-                hossz = rng.randint(8, 55)
-                szel = rng.randint(folyosomin, folyosomax)
+                hossz = self.rng.randint(8, 55)
+                szel = self.rng.randint(folyosomin, folyosomax)
 
                 cs_s, cs_o = s, o
                 sikerult = False
@@ -546,88 +1189,57 @@ class Tank_Terkep:
                     cs_s, cs_o = ns, no
                     sikerult = True
 
-                    if rng.random() < 0.25:
-                        szel = max(folyosomin, min(folyosomax, szel + rng.choice([-1, 1])))
+                    if self.rng.random() < 0.25:
+                        szel = max(folyosomin, min(folyosomax, szel + self.rng.choice([-1, 1])))
 
-                    if rng.random() < 0.22:
-                        if (ds, do) in [(1,0),(-1,0)]: ds, do = (0, rng.choice([-1, 1]))
-                        else: ds, do = (rng.choice([-1, 1]), 0)
+                    if self.rng.random() < 0.22:
+                        if (ds, do) in [(1,0),(-1,0)]: ds, do = (0, self.rng.choice([-1, 1]))
+                        else: ds, do = (self.rng.choice([-1, 1]), 0)
 
                 if sikerult:
                     kesz += 1
 
-        def _repedes_lyuk_szoras():
-            repedes_esely = 0.035
-            lyuk_esely = 0.004
-
-            def _jarhato_tile(v):
-                # 0: padló, 2: víz, -1: kijárat, 4: lyuk_fal
-                return v in (0, 2, -1, 4)
-
-            for y in range(2, self.MAG - 2):
-                for x in range(2, self.SZEL - 2):
-                    if self.racs[y, x] != 1:
-                        continue
-
-                    fel = self.racs[y-1, x]
-                    le = self.racs[y+1, x]
-                    bal = self.racs[y, x-1]
-                    jobb = self.racs[y, x+1]
-
-                    if ((_jarhato_tile(bal) and _jarhato_tile(jobb)) or (_jarhato_tile(fel) and _jarhato_tile(le))):
-                        if rng.random() < lyuk_esely:
-                            self.racs[y, x] = 4  # lyuk_fal
-                            continue
-
-                    if (_jarhato_tile(fel) or _jarhato_tile(le) or _jarhato_tile(bal) or _jarhato_tile(jobb)):
-                        if rng.random() < repedes_esely:
-                            self.racs[y, x] = 3  # repedes_fal
-
-        # --- GENERÁLÁSI FÁZISOK ---
-
-        # 1. START SZOBA
+        
         start_room = (1, 1, 20, 20)
         carve_rect(*start_room, val=0)
         self.rooms.append(start_room)
+        
 
-        # 2. RANDOM SZOBÁK
-        target = int(rooms_target) if rooms_target is not None else rng.randint(24, 40)
+        
+        target = int(rooms_target) if rooms_target is not None else self.rng.randint(24, 40)
         attempts = target * 25
         for _ in range(attempts):
             if len(self.rooms) >= target: break
-            h, w = rng.randint(6, 18), rng.randint(6, 18)
-            s1 = rng.randint(2, self.MAG - h - 3)
-            o1 = rng.randint(2, self.SZEL - w - 3)
+            h, w = self.rng.randint(6, 18), self.rng.randint(6, 18)
+            s1 = self.rng.randint(2, self.MAG - h - 3)
+            o1 = self.rng.randint(2, self.SZEL - w - 3)
             room = (s1, o1, s1 + h, o1 + w)
             if any(overlaps(room, r, pad=2) for r in self.rooms):
                 continue
             carve_rect(*room, val=0)
             self.rooms.append(room)
 
-        # 3. SZOBÁK ÖSSZEKÖTÉSE
+       
         _szoba_kapcsolatok_ket_utas()
 
-        # 4. ZSÁKUTCÁK
         _zsakutcak_hozzaadasa(zsakutca_db)
 
-        # 5. REPEDÉSEK ÉS LYUKAK
-        #_repedes_lyuk_szoras()
-
-        # 6. VÍZ MEDENCÉK
         for room in self.rooms[1:]:
-            if rng.random() < 0.20:
+            if self.rng.random() < 0.20:
                 s1, o1, s2, o2 = room
                 if (s2 - s1) >= 10 and (o2 - o1) >= 10:
-                    ph, pw = rng.randint(3, 6), rng.randint(3, 6)
-                    ps = rng.randint(s1 + 2, s2 - ph - 2)
-                    po = rng.randint(o1 + 2, o2 - pw - 2)
+                    ph, pw = self.rng.randint(3, 6), self.rng.randint(3, 6)
+                    ps = self.rng.randint(s1 + 2, s2 - ph - 2)
+                    po = self.rng.randint(o1 + 2, o2 - pw - 2)
                     carve_rect(ps, po, ps + ph, po + pw, val=2)
 
-        # 7. KIJÁRAT ÉS BIZTOSÍTÁSOK
+        
+        for i in range(generalas_cfg.get("chest_kezdo_db", 0)):
+            self.chest_generalas(i)
+
         es, eo = room_center(self.rooms[-1])
         self.racs[es, eo] = -1
 
-        # Keret (NumPy)
         self.racs[0, :] = 1
         self.racs[-1, :] = 1
         self.racs[:, 0] = 1
@@ -635,45 +1247,95 @@ class Tank_Terkep:
 
         self.racs[2, 2] = 0
 
-    def jarhato(self, sor: int, oszlop: int) -> bool:
+    def chest_generalas(self, azonosito):
+        def _jarhato_tile(v):
+            # 0: padló, 2: víz, -1: kijárat, 4: lyuk_fal
+            return v in (0, 2, -1, 4)
+
+        
+        for _ in range(5000):  
+            y = self.rng.randint(2, self.MAG - 3)
+            x = self.rng.randint(2, self.SZEL - 3)
+
+            
+            if self.racs[y, x] != 1:
+                continue
+
+            fel = self.racs[y-1, x]
+            le = self.racs[y+1, x]
+            bal = self.racs[y, x-1]
+            jobb = self.racs[y, x+1]
+
+            
+            if ((_jarhato_tile(bal) and _jarhato_tile(jobb)) or (_jarhato_tile(fel) and _jarhato_tile(le))):
+                if self.rng.random() < 0.004:  # lyuk_esely
+                    self.racs[y, x] = 4  # lyuk_fal
+                    continue
+
+            
+            if (_jarhato_tile(fel) or _jarhato_tile(le) or _jarhato_tile(bal) or _jarhato_tile(jobb)):
+                self.racs[y, x] = 3  # repedes_fal
+                chest = Chest(azonosito, x * self.CELLA + self.CELLA/2, y * self.CELLA + self.CELLA/2, self.beallitasok, x, y, self.vilag)
+                hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, x*self.CELLA, y*self.CELLA)
+                self.chest_racs[hely[0], hely[1]].add(chest)
+                return chest
+
+        
+        for y in range(2, self.MAG - 2):
+            for x in range(2, self.SZEL - 2):
+                if self.racs[y, x] == 1:
+                    fel, le, bal, jobb = self.racs[y-1, x], self.racs[y+1, x], self.racs[y, x-1], self.racs[y, x+1]
+                    if (_jarhato_tile(fel) or _jarhato_tile(le) or _jarhato_tile(bal) or _jarhato_tile(jobb)):
+                        self.racs[y, x] = 3
+                        chest = Chest(azonosito, x * self.CELLA + self.CELLA/2, y * self.CELLA + self.CELLA/2, self.beallitasok, x, y, self.vilag)
+                        hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, x*self.CELLA, y*self.CELLA)
+                        self.chest_racs[hely[0], hely[1]].add(chest)
+                        return chest
+                    
+
+    def adott_cella_ertek_atiras(self, cellax, cellay, ertek):
+        self.racs[int(cellay), int(cellax)] = ertek
+
+        
+
+    def jarhato(self, sor, oszlop):
         if not (0 <= sor < self.MAG and 0 <= oszlop < self.SZEL):
             return False
         
         v = self.racs[sor, oszlop]
         
-        # Ha 1 (fal) vagy 3 (repedes), akkor nem mehetünk rá
+        
         if v == 1 or v == 3:
             return False
             
-        # Ha 0 (padló), 2 (víz), -1 (kijárat) vagy 4 (lyuk_fal), akkor igen
         return True
 
-    def csempe_hely(self, x, y) -> tuple:
+    def csempe_hely(self, x, y):
         oszlop = int(x // self.CELLA)
         sor = int(y // self.CELLA)
         return oszlop, sor
 
 class VilagAllapot:
-
-    # ===== 1. KÖZÖS / FŐ VEZÉRLÉS =====
-
-    def __init__(self, beallitasok: Optional[Beallitasok] = None, jatek_mode: str = "alma", nehezseg_szint: str = "Normal"):
-        self.beallitasok = beallitasok or Beallitasok()  # A közös, minden játékmód által használt konfiguráció.
-        self.jatek_mode = jatek_mode  # Az aktuális játékmód neve: alma vagy patogos.
-        self.nehezseg_szint = nehezseg_szint  # Az aktuális nehézségi szint neve.
-        self.racs_vilag_alma: Dict[Tuple[int, int], List[Tuple[float, float]]] = defaultdict(list)  # A ritkított rácsban tárolt almák listája.
-        self.racs_vilag_kigyo: Dict[Tuple[int, int], List[Tuple[str, int, float, float, float]]] = defaultdict(list)  # A kígyótestpontok rács-regisztere ütközéshez.
+    BEALITASOK = Beallitasok()
+    def __init__(self, beallitasok: Optional[Beallitasok] = None, jatek_mode: str = "alma", nehezseg_szint: str = "Normal", vilag_szelesseg=None, vilag_magassag=None, ai_db=6):
+        self.beallitasok = beallitasok or Beallitasok() 
+        self.jatek_mode = jatek_mode 
+        self.nehezseg_szint = nehezseg_szint 
+        self.racs_vilag_alma: Dict[Tuple[int, int], List[Tuple[float, float]]] = defaultdict(list) 
+        self.racs_vilag_kigyo: Dict[Tuple[int, int], List[Tuple[str, int, float, float, float]]] = defaultdict(list)
         self.racs_vilag_lovedekek = defaultdict(set)
         self.racs_vilag_tank_jatekosok = defaultdict(set)
-        self.jatekosok: Dict[str, object] = {}  # Az emberi játékosok szótára, módtól függően külön típusú objektumokkal.
-        self.kigyo_ellenseg: List[KigyoAdat] = []  # Az almás mód AI kígyóinak listája.
+        self.racs_vilag_chest = defaultdict(set)
+        self.racs_vilag_chestdrop = defaultdict(set)
+        self.jatekosok: Dict[str, object] = {} 
+        self.kigyo_ellenseg: List[KigyoAdat] = []
         self.tank_ellensegek: List[Tanki] = []
-        self.max_kigyok = 0  # Az adott nehézségi szinthez tartozó cél AI kígyó darabszám.
-        self.eddigi_kigyok = 0  # Folyamatos sorszámláló az új AI kígyókhoz.
+        self.max_kigyok = 0 
+        self.eddigi_kigyok = 0 
         self.eddigi_tankok_npc = 0
-        self.kigyo_respawn_idozito = 0  # Az AI kígyó visszatöltési időzítője.
-        self.alma_potlasi_idozito = 0  # Az alma pótlás ritmusa.
-        self.veletlen = random.Random()  # Saját véletlen generátor a világ logikájához.
+        self.kigyo_respawn_idozito = 0 
+        self.alma_potlasi_idozito = 0 
+        self.veletlen = random.Random() 
         self.dontes_kiosztas = 0
         self.frissitesi_szamlalo = 0
         self.max_frisitesi_szamolo = self.beallitasok.dontes_gyakorisag
@@ -682,21 +1344,44 @@ class VilagAllapot:
         self.lovedek_azonosito = 0
         self.halal_lista = []
         self.kamera_sugar = float
+        self.tank_szeleseg = vilag_szelesseg or beallitasok.tank_vilag_szelesseg
+        self.tank_magassag = vilag_magassag or beallitasok.tank_vilag_magassag
+        self.ai_db = int(ai_db)
+        self.acc = 0.5
+        self.gyorsulas_csokentes = self.beallitasok.gyorsulas_csokentes
+        self.gravitacio = self.beallitasok.gravitacio
+        self.alap_gravitacio = self.gravitacio
+        self.max_gravitacio = self.beallitasok.max_gravitacio
+        
+        
+        self.vilag_terkep_bealitasok = {}
+        fajl = os.path.join(os.path.dirname(__file__), "terkep.json")
+        if os.path.exists(fajl):
+            with open(fajl, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            self.vilag_terkep_bealitasok = (cfg.get("vilagok", {})) or {}
+
+        self.max_chest = self.vilag_terkep_bealitasok.get("tankos", {}).get("generalas", {}).get("chest_max_db", 10)
+        self.aktualis_chest_db = self.vilag_terkep_bealitasok.get("tankos", {}).get("generalas", {}).get("chest_kezdo_db", 10)
+        self.chest_azonosito = self.aktualis_chest_db-1
+        self.chestek = []
         self.uj_jatek(jatek_mode, nehezseg_szint)
         
 
-    def frissites(self, delta_ido) -> None:
+    def frissites(self, delta_ido) :
         if self.jatek_mode == "alma":
             self._alma_mod_frissites(delta_ido)
             self.beallitasok.kezdes = False
         elif self.jatek_mode == "tankos":
             self._tankos_mod_frissites(delta_ido)
+        elif self.jatek_mode == "platformer":
+            self._platformer_frissites(delta_ido)
 
         else:
             print(f"ilyen mode nincs: {self.jatek_mode}")
             return
 
-    def uj_jatek(self, jatek_mode: str, nehezseg_szint: str) -> None:
+    def uj_jatek(self, jatek_mode, nehezseg_szint, platformer_jelenlegi_szoba="") :
         self.jatek_mode = jatek_mode
         self.nehezseg_szint = nehezseg_szint
         self.racs_vilag_alma.clear()
@@ -712,12 +1397,14 @@ class VilagAllapot:
             self._ai_kigyok_potlas(self.max_kigyok)
         elif self.jatek_mode == "tankos":
             self.tankos_kezdes()
+        elif self.jatek_mode == "platformer":
+            self.platformer_kezdes(platformer_jelenlegi_szoba)
 
         else:
             print(f"nincs ilyen játékmood: {self.jatek_mode}")
             return
 
-    def jatekos_hozzaadasa(self, azonosito: str, nev: str, szin: Tuple[int, int, int], kep=None) -> None:
+    def jatekos_hozzaadasa(self, azonosito, nev, szin, kep=None, sugar=10, k_szeleseg=600, k_magassag=400):
         if self.jatek_mode == "alma":
             x, y = self._szoba_pozicio_biztonsagos(self.beallitasok.kigyó_sugár, "kigyo")
             uj = KigyoAdat(azonosito, nev, szin, self.nehezseg_szint, x, y, self.beallitasok, True)
@@ -727,15 +1414,21 @@ class VilagAllapot:
             x, y = self._tankos_spawn_pozicio()
             uj = Tanki(azonosito, nev, szin, x, y, self.beallitasok)
             uj.jatekos_e = True
-            uj.loves_cooldown = 0.1
-            uj.sebesseg = 500
-            #uj.hp = 100
+            #uj.loves_cooldown = 0.1
+            #uj.sebesseg = 500
+            uj.hp = 100
+            uj.buff_hozzaadasa("shild", Buffok.shild, 0.0, 30)
             if kep is not None:
                 uj.tank_kep_nev = kep
             self.jatekosok[azonosito] = uj
             self.tank_jatekos_racs_hozzaad(uj)
+        elif self.jatek_mode == "platformer":
+            x, y = 50, 50
+            uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok)
+            uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
+            self.jatekosok[azonosito] = uj
 
-    def jatekos_torlese(self, azonosito: str) -> None:
+    def jatekos_torlese(self, azonosito: str) :
         jatekos = self.jatekosok.get(azonosito)
 
         if isinstance(jatekos, KigyoAdat):
@@ -747,26 +1440,16 @@ class VilagAllapot:
             self.tank_jatekos_racsbol_torles(jatekos)
             del self.jatekosok[azonosito]
 
-    def ujrainditas(self, adatok):
+    def folytatas(self, adatok):
         if isinstance(adatok, tuple):
-            azonosito, nev, szin = adatok
+            azonosito, nev, szin, kep = adatok
             #if azonosito not in self.jatekosok:
             #   return
             try:
                 self.jatekos_torlese(azonosito)
             except:
                 pass
-            self.jatekos_hozzaadasa(azonosito, nev, szin)
-            
-        
-            
-        #if azonosito in self.jatekosok:
-         #   pass
-            
-            #nev = self.jatekosok[azonosito].nev
-            #szin = self.jatekosok[azonosito].szin
-            
-
+            self.jatekos_hozzaadasa(azonosito, nev, szin, kep)
             
         else:
             azonosito = adatok.azonosito
@@ -775,7 +1458,7 @@ class VilagAllapot:
             self.jatekos_torlese(azonosito)
             self.jatekos_hozzaadasa(azonosito, nev, szin)
 
-    def _szoba_pozicio_biztonsagos(self, sugar: float, mi: str = "") -> Tuple[float, float]:
+    def _szoba_pozicio_biztonsagos(self, sugar, mi = ""):
         for _ in range(600):
             x = self.veletlen.randint(int(sugar * 2), int(self.beallitasok.vilag_szelesseg - sugar * 2))
             y = self.veletlen.randint(int(sugar * 2), int(self.beallitasok.vilag_magassag - sugar * 2))
@@ -801,19 +1484,27 @@ class VilagAllapot:
                     return float(x), float(y)
         return float(self.veletlen.randint(200, self.beallitasok.vilag_szelesseg - 200)), float(self.veletlen.randint(200, self.beallitasok.vilag_magassag - 200))
 
-    def kamera_pozicio(self, azonosito: str, szelesseg: int, magassag: int) -> Tuple[float, float]:
+    def kamera_pozicio(self, azonosito, szelesseg, magassag):
         if azonosito not in self.jatekosok:
             return 0.0, 0.0
         jatekos = self.jatekosok[azonosito]
         if self.jatek_mode == "alma":
             px, py = jatekos.fej_pozicio()
+        elif self.jatek_mode == "platformer":
+            px, py = jatekos.kamera.apply() #jatekos.kamera.rect.get("x"), jatekos.kamera.rect.get("y")
+            #px += jatekos.x
+            #py += jatekos.y
         else:
             px, py = jatekos.x, jatekos.y
-        return px - szelesseg / 2, py - magassag / 2
+        return Vector(px - szelesseg / 2, py - magassag / 2)
 
-    def nezet_jatekosnak(self, azonosito: str, szelesseg: int, magassag: int) -> dict:
+    def nezet_jatekosnak(self, azonosito, szelesseg, magassag):
         kamera_x, kamera_y = self.kamera_pozicio(azonosito, szelesseg, magassag)
         self.kamera_sugar = szelesseg + magassag
+        jatekos = self.jatekosok.get(azonosito)
+        #
+        # jatekos.kamera.kepernyo_szelesseg = szelesseg
+        jatekos.kamera.kepernyo_magassag = magassag
 
         allapot = {
             "tipus": "nagy",
@@ -825,9 +1516,7 @@ class VilagAllapot:
             "kamera_y": kamera_y,
             "sajat_id": azonosito,
         }
-        
 
-            
         if self.jatek_mode == "alma":
             top = sorted(self.osszes_kigyo(), key=lambda k: k.alma_pontok, reverse=True)[:self.beallitasok.top_hany]
             szoveg = []
@@ -895,12 +1584,7 @@ class VilagAllapot:
                     )
         
         elif self.jatek_mode == "tankos":
-            allapot["terkep_resz"] = self.tankos_lathato_terkep_resz(
-                kamera_x,
-                kamera_y,
-                szelesseg,
-                magassag
-            )
+            allapot["terkep_resz"] = self.tankos_lathato_terkep_resz(kamera_x, kamera_y, szelesseg, magassag)
             
 
             allapot["jatekosok"] = {
@@ -911,14 +1595,22 @@ class VilagAllapot:
                 az: jatekos.allapot_dict()
                 for az, jatekos in self.tank_ellensegek
                 }
-            allapot["lovedekek"] = self._lathato_lovedekek(kamera_x, kamera_y, szelesseg, magassag) #[lovedek.allapot_dict() for lovedek in self.lovedekek if lovedek.el]
+            allapot["lovedekek"] = self._lathato_lovedekek(kamera_x, kamera_y, szelesseg, magassag)
 
+            allapot["buff"] = self._lathato_chestek(kamera_x, kamera_y, szelesseg, magassag)
+
+        elif self.jatek_mode == "platformer":
+            allapot["szoba"] = self.jelenlegi_szoba
+            allapot["jatekosok"] = {
+                az: jatekos.allapot_dict()
+                for az, jatekos in self.jatekosok.items()
+            }
         else:
             print(f"ilyen mode nincs: {self.jatek_mode}")
 
         return allapot
 
-    def nezet_jatekosnak_kicsi(self, azonosito: str, szelesseg: int, magassag: int) -> dict:
+    def nezet_jatekosnak_kicsi(self, azonosito, szelesseg, magassag):
         kamera_x, kamera_y = self.kamera_pozicio(azonosito, szelesseg, magassag)
 
         allapot = {
@@ -968,10 +1660,31 @@ class VilagAllapot:
         allapot["almak"] = self._lathato_almak(kamera_x, kamera_y, szelesseg, magassag)
         return allapot
 
+    def mozgas_beallitas(self, azonosito: str, balra: bool, jobbra: bool, fel: bool, le: bool, loves: bool):
+        if self.jatek_mode not in ("tankos", "platformer"):
+            return
 
-    # ===== 2. CSAK KÍGYÓS MÓD =====
+        jatekos = self.jatekosok.get(azonosito)
+        try:
+            jatekos.mozog_balra = balra
+            jatekos.mozog_jobbra = jobbra
+            jatekos.mozog_fel = fel
+            jatekos.mozog_le = le
+            if isinstance(jatekos, Tanki):
+                jatekos.loves = loves
+            elif isinstance(jatekos, P_elolenyek): # or jatekos.loves
+                jatekos.jump = loves
+            else: print("nincs ilyen mood  kozos_jatekmag.py -> VilagAllapot -> mozgas_beallitas-ban")
+        except:
+            pass
 
-    def kigyo_celszam(self, nehezseg_szint: str) -> int:
+    def kep_meret_bealitas(self, azonosito, nev, nev2, kep, x, y):
+        eloleny = self.jatekosok.get(azonosito)
+        setattr(eloleny, nev, x)
+        setattr(eloleny, nev2, y)
+    # --------------- CSAK KÍGYÓS MÓD ------------------
+
+    def kigyo_celszam(self, nehezseg_szint):
         if nehezseg_szint == "Easy":
             return 120
         if nehezseg_szint == "Normal":
@@ -984,7 +1697,7 @@ class VilagAllapot:
             return 280
         return 180
 
-    def _kezdo_alma_db(self) -> int:
+    def _kezdo_alma_db(self):
         if self.nehezseg_szint == "Easy":
             return 2000
         if self.nehezseg_szint == "Normal":
@@ -995,14 +1708,14 @@ class VilagAllapot:
             return 5000
         return 6000
 
-    def jatekos_irany_beallitasa(self, azonosito: str, dx: float, dy: float) -> None:
+    def jatekos_irany_beallitasa(self, azonosito, dx, dy) :
         if self.jatek_mode != "alma":
             return
         kigyo = self.jatekosok.get(azonosito)
         if isinstance(kigyo, KigyoAdat):
             kigyo.beallit_irany(dx, dy)
 
-    def jatekos_gyorsitas_beallitasa(self, azonosito: str, gyors: bool) -> None:
+    def jatekos_gyorsitas_beallitasa(self, azonosito, gyors) :
         if self.jatek_mode != "alma":
             return
         kigyo = self.jatekosok.get(azonosito)
@@ -1017,7 +1730,7 @@ class VilagAllapot:
             else:
                 kigyo.cel_sebesseg = kigyo.alap_sebesseg
 
-    def _alma_mod_frissites(self, delta_ido) -> None:
+    def _alma_mod_frissites(self, delta_ido) :
         if not self.jatekosok and not self.kigyo_ellenseg:
             return
         
@@ -1029,12 +1742,7 @@ class VilagAllapot:
                 kigyo.sebesseg += (kigyo.cel_sebesseg - kigyo.sebesseg) * 0.18
             else:
                 cel_dx, cel_dy = self._legjobb_irany_ai(kigyo, delta_ido)
-                uj_dx, uj_dy = self._forditas_korlatozva(
-                    kigyo.irany_x,
-                    kigyo.irany_y,
-                    cel_dx,
-                    cel_dy
-                )
+                uj_dx, uj_dy = self._forditas_korlatozva(kigyo.irany_x, kigyo.irany_y, cel_dx, cel_dy)
                 kigyo.irany_x, kigyo.irany_y = KorSeged.normalizal(uj_dx, uj_dy)
                 kigyo.sebesseg = kigyo.alap_sebesseg
             self._kigyo_fej_leptetes(kigyo, delta_ido)
@@ -1076,7 +1784,7 @@ class VilagAllapot:
             self.jatekos_torlese(azonosito)
         self.frissitesi_szamlalo += 1
 
-    def _almak_generalasa(self, mennyiseg: int) -> None:
+    def _almak_generalasa(self, mennyiseg) :
         jelenlegi = self.almak_szama()
         cel = min(self.beallitasok.alma_maximum, jelenlegi + mennyiseg)
         while self.almak_szama() < cel:
@@ -1086,7 +1794,7 @@ class VilagAllapot:
             if not self._alma_tul_kozel(x, y):
                 self.racs_vilag_alma[kulcs].append((float(x), float(y)))
 
-    def _alma_tul_kozel(self, x: float, y: float) -> bool:
+    def _alma_tul_kozel(self, x, y):
         sugar = self.beallitasok.alma_size * 1.4
         for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, x, y, sugar, 1):
             for ax, ay in self.racs_vilag_alma.get(kulcs, []):
@@ -1094,10 +1802,10 @@ class VilagAllapot:
                     return True
         return False
 
-    def almak_szama(self) -> int:
+    def almak_szama(self):
         return sum(len(ertek) for ertek in self.racs_vilag_alma.values())
 
-    def _ai_kigyok_potlas(self, mennyiseg: int) -> None:
+    def _ai_kigyok_potlas(self, mennyiseg) :
         for _ in range(mennyiseg):
             self.eddigi_kigyok += 1
             nev = f"AI_{self.eddigi_kigyok}"
@@ -1112,7 +1820,7 @@ class VilagAllapot:
             self.kigyo_ellenseg.append(uj)
             self.racs_kigyo_hozzaad(uj)
 
-    def osszes_kigyo(self) -> List[KigyoAdat]:
+    def osszes_kigyo(self):
         eredmeny = []
         for j in self.jatekosok.values():
             if isinstance(j, KigyoAdat):
@@ -1120,14 +1828,14 @@ class VilagAllapot:
         eredmeny.extend(self.kigyo_ellenseg)
         return eredmeny
 
-    def _kigyo_racs_rekord_index(self, cella_lista, azonosito: str, index: int) -> int:
+    def _kigyo_racs_rekord_index(self, cella_lista, azonosito, index):
         for poz, rekord in enumerate(cella_lista):
             rekord_azonosito, rekord_index, _, _, _ = rekord
             if rekord_azonosito == azonosito and rekord_index == index:
                 return poz
         return -1
 
-    def _kigyo_racsbol_torles(self, kigyo: KigyoAdat) -> None:
+    def _kigyo_racsbol_torles(self, kigyo: KigyoAdat) :
         if not hasattr(kigyo, "utolso_racs"):
             return
 
@@ -1147,7 +1855,7 @@ class VilagAllapot:
 
         kigyo.utolso_racs = [None] * len(kigyo.test_pontok)
 
-    def _kigyok_racsozasa(self) -> None:
+    def _kigyok_racsozasa(self) :
         for kigyo in self.osszes_kigyo():
             if not kigyo.el:
                 continue
@@ -1213,7 +1921,7 @@ class VilagAllapot:
             self.racs_vilag_kigyo[kulcs].append((kigyo.azonosito, index, x, y, kigyo.sugar))
             kigyo.utolso_racs.append(kulcs)
 
-    def kigyo_to_almak(self, kigyok: list):
+    def kigyo_to_almak(self, kigyok):
         for kigyo in kigyok:
             for x, y in kigyo.test_pontok:
                 db = self.veletlen.randint(1, 2)
@@ -1229,7 +1937,7 @@ class VilagAllapot:
                         kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, uj_x, uj_y)
                         self.racs_vilag_alma[kulcs].append((uj_x, uj_y))
 
-    def _kigyo_fej_leptetes(self, kigyo: KigyoAdat, delta_ido) -> None:
+    def _kigyo_fej_leptetes(self, kigyo: KigyoAdat, delta_ido) :
         fej_x, fej_y = kigyo.test_pontok[0]
         kigyo.test_pontok[0][0] = fej_x + kigyo.irany_x * kigyo.sebesseg * delta_ido
         kigyo.test_pontok[0][1] = fej_y + kigyo.irany_y * kigyo.sebesseg * delta_ido
@@ -1257,7 +1965,7 @@ class VilagAllapot:
         if len(kigyo.utvonal) > max_pont:
             kigyo.utvonal = kigyo.utvonal[:max_pont]
 
-    def _kigyo_etetes(self, kigyo: KigyoAdat) -> None:
+    def _kigyo_etetes(self, kigyo: KigyoAdat) :
         fej_x, fej_y = kigyo.fej_pozicio()
         for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, fej_x, fej_y, kigyo.sugar + self.beallitasok.alma_kor_sugár, 1):
             almak = self.racs_vilag_alma.get(kulcs)
@@ -1273,7 +1981,7 @@ class VilagAllapot:
                     kigyo.alma_pontok += 1
                     break
 
-    def _kigyo_utkozesek(self, kigyo: KigyoAdat) -> None:
+    def _kigyo_utkozesek(self, kigyo: KigyoAdat) :
         fej_x, fej_y = kigyo.fej_pozicio()
         sugar = kigyo.sugar
 
@@ -1288,7 +1996,7 @@ class VilagAllapot:
                 if kulcs2 in marvizsgalt:
                     continue
                 marvizsgalt.add(kulcs2)
-                if idegen_id == kigyo.azonosito: # and pont_index < self.beallitasok.kigyo_onvedo_index:
+                if idegen_id == kigyo.azonosito:
                     continue
                 if KorSeged.korok_utkozne_e(fej_x, fej_y, sugar, px, py, psugar * self.beallitasok.kigyo_utkozes_szorzo / 2):
                     kigyo.el = False
@@ -1298,23 +2006,17 @@ class VilagAllapot:
                             gyilkos.olesek += 1
                     return
 
-    def _kigyo_keresese(self, azonosito: str) -> Optional[KigyoAdat]:
+    def _kigyo_keresese(self, azonosito):
         for kigyo in self.osszes_kigyo():
             if kigyo.azonosito == azonosito:
                 return kigyo
         return None
 
-    def _kozelebbi_almak(self, x: float, y: float) -> List[Tuple[float, float]]:
+    def _kozelebbi_almak(self, x: float, y: float):
         eredmeny = []
         keresesi_tav = self.beallitasok.racsok_nagysaga * 2.2
 
-        for kulcs in KorSeged.szomszed_kulcsok(
-            self.beallitasok.racsok_nagysaga,
-            x,
-            y,
-            keresesi_tav,
-            2
-        ):
+        for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, x, y, keresesi_tav, 2):
             eredmeny.extend(self.racs_vilag_alma.get(kulcs, []))
 
         if not eredmeny:
@@ -1323,7 +2025,7 @@ class VilagAllapot:
         eredmeny.sort(key=lambda alma: KorSeged.tavolsag(x, y, alma[0], alma[1]))
         return eredmeny[:40]
 
-    def _legjobb_irany_ai(self, kigyo: KigyoAdat, delta_ido) -> Tuple[float, float]:
+    def _legjobb_irany_ai(self, kigyo: KigyoAdat, delta_ido):
         if self.frissitesi_szamlalo % kigyo.dontes_gyakorisag != kigyo.dontes_fazis:
             return kigyo.irany_x, kigyo.irany_y
 
@@ -1332,7 +2034,6 @@ class VilagAllapot:
         almak = self._kozelebbi_almak(fej_x, fej_y)
         cel_x, cel_y = self._celpont_kereses(kigyo, almak)
 
-        # Alapirány: alma felé
         alma_dx = cel_x - fej_x
         alma_dy = cel_y - fej_y
         alap_dx, alap_dy = KorSeged.normalizal(alma_dx, alma_dy)
@@ -1343,7 +2044,6 @@ class VilagAllapot:
         veszely_tav = 50.0 + kigyo.sugar
         fal_puffer = kigyo.sugar + 10.0
 
-        # 1) Falveszély vizsgálat
         bal_tav = fej_x
         jobb_tav = self.beallitasok.vilag_szelesseg - fej_x
         fent_tav = fej_y
@@ -1366,16 +2066,9 @@ class VilagAllapot:
             menekulo_y -= 1.0
             veszely_van = True
 
-        # 2) Közeli kígyótest veszély
-        for kulcs in KorSeged.szomszed_kulcsok(
-            self.beallitasok.racsok_nagysaga,
-            fej_x,
-            fej_y,
-            veszely_tav,
-            1
-        ):
+        for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, fej_x, fej_y,veszely_tav, 1):
             for idegen_id, pont_index, px, py, psugar in self.racs_vilag_kigyo.get(kulcs, []):
-                if idegen_id == kigyo.azonosito:# and pont_index < self.beallitasok.kigyo_onvedo_index:
+                if idegen_id == kigyo.azonosito:
                     continue
 
                 tav = KorSeged.tavolsag(fej_x, fej_y, px, py)
@@ -1386,14 +2079,12 @@ class VilagAllapot:
                     menekulo_x += (fej_x - px) / tav
                     menekulo_y += (fej_y - py) / tav
 
-        # 3) Ha van veszély, akkor menekülj
         if veszely_van:
             dx, dy = KorSeged.normalizal(menekulo_x, menekulo_y)
 
             if abs(dx) > 1e-6 or abs(dy) > 1e-6:
                 return dx, dy
 
-            # ha valamiért nem jött ki értelmes menekülő irány
             balra_dx, balra_dy = -kigyo.irany_y, kigyo.irany_x
             jobbra_dx, jobbra_dy = kigyo.irany_y, -kigyo.irany_x
 
@@ -1407,12 +2098,10 @@ class VilagAllapot:
 
             return KorSeged.normalizal(balra_dx, balra_dy)
 
-        # 4) Ha nincs veszély, menjen az alma felé,
-        # de csak ha az irány rövid távon biztonságos
         if self._irany_biztonsagos(kigyo, alap_dx, alap_dy, 38.0):
             return alap_dx, alap_dy
 
-        # 5) Ha az alma iránya nem biztonságos, keress közeli alternatívát
+        
         legjobb_dx, legjobb_dy = kigyo.irany_x, kigyo.irany_y
         legjobb_tav = float("inf")
 
@@ -1436,7 +2125,7 @@ class VilagAllapot:
 
         return KorSeged.normalizal(legjobb_dx, legjobb_dy)
 
-    def _celpont_kereses(self, kigyo: KigyoAdat, almak: List[Tuple[float, float]]) -> Tuple[float, float]:
+    def _celpont_kereses(self, kigyo: KigyoAdat, almak):
         fej_x, fej_y = kigyo.fej_pozicio()
 
         if almak:
@@ -1453,10 +2142,7 @@ class VilagAllapot:
             if legjobb is not None:
                 return legjobb
 
-        return (
-            fej_x + kigyo.irany_x * 180.0,
-            fej_y + kigyo.irany_y * 180.0,
-        )
+        return (fej_x + kigyo.irany_x * 180.0, fej_y + kigyo.irany_y * 180.0)
 
     def kordinata_kozti_kordinata(self, indulas, erkezes):
         """True = nincs akadály közte, False = van akadály közte."""
@@ -1493,30 +2179,19 @@ class VilagAllapot:
                 err += dx
                 y += sy
 
-    def _irany_biztonsagos(self, kigyo: KigyoAdat, dx: float, dy: float, veszely_tav: float) -> bool:
+    def _irany_biztonsagos(self, kigyo: KigyoAdat, dx, dy, veszely_tav):
         fej_x, fej_y = kigyo.fej_pozicio()
 
         for minta in (0.35, 0.7, 1.0):
             px = fej_x + dx * veszely_tav * minta
             py = fej_y + dy * veszely_tav * minta
 
-            if (
-                px < kigyo.sugar
-                or px > self.beallitasok.vilag_szelesseg - kigyo.sugar
-                or py < kigyo.sugar
-                or py > self.beallitasok.vilag_magassag - kigyo.sugar
-            ):
+            if (px < kigyo.sugar or px > self.beallitasok.vilag_szelesseg - kigyo.sugar or py < kigyo.sugar or py > self.beallitasok.vilag_magassag - kigyo.sugar):
                 return False
 
-            for kulcs in KorSeged.szomszed_kulcsok(
-                self.beallitasok.racsok_nagysaga,
-                px,
-                py,
-                kigyo.sugar * 2.5,
-                1
-            ):
+            for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, px, py, kigyo.sugar * 2.5, 1):
                 for idegen_id, pont_index, resz_x, resz_y, resz_sugar in self.racs_vilag_kigyo.get(kulcs, []):
-                    if idegen_id == kigyo.azonosito:# and pont_index < self.beallitasok.kigyo_onvedo_index:
+                    if idegen_id == kigyo.azonosito:
                         continue
 
                     if KorSeged.korok_utkozne_e(px, py, kigyo.sugar, resz_x, resz_y, resz_sugar):
@@ -1524,19 +2199,19 @@ class VilagAllapot:
 
         return True
 
-    def _minta_veszely_pont(self, kigyo: KigyoAdat, px: float, py: float) -> float:
+    def _minta_veszely_pont(self, kigyo: KigyoAdat, px, py):
         buntetes = 0.0
         mintakulcsok = KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, px, py, kigyo.sugar * 3, 1)
         for kulcs in mintakulcsok:
             for idegen_id, pont_index, resz_x, resz_y, resz_sugar in self.racs_vilag_kigyo.get(kulcs, []):
-                if idegen_id == kigyo.azonosito:# and pont_index < self.beallitasok.kigyo_onvedo_index:
+                if idegen_id == kigyo.azonosito:
                     continue
                 tav = KorSeged.tavolsag(px, py, resz_x, resz_y)
                 if tav < kigyo.sugar * 3.0:
                     buntetes += max(0.0, 5000.0 - tav * 150.0)
         return buntetes
 
-    def lathato_kigyo_azonositok(self, kamera_x: float, kamera_y: float, szelesseg: int, magassag: int, sajat_id: Optional[str] = None) -> set[str]:
+    def lathato_kigyo_azonositok(self, kamera_x, kamera_y, szelesseg, magassag, sajat_id = None):
         bal = kamera_x - self.beallitasok.kigyo_rajzolas_puffer
         jobb = kamera_x + szelesseg + self.beallitasok.kigyo_rajzolas_puffer
         fent = kamera_y - self.beallitasok.kigyo_rajzolas_puffer
@@ -1677,7 +2352,7 @@ class VilagAllapot:
         
         return regi
 
-    def _lathato_almak(self, kamera_x: float, kamera_y: float, szelesseg: int, magassag: int) -> List[Tuple[float, float]]:
+    def _lathato_almak(self, kamera_x, kamera_y, szelesseg, magassag):
         bal = kamera_x - self.beallitasok.alma_rajzolas_puffer
         jobb = kamera_x + szelesseg + self.beallitasok.alma_rajzolas_puffer
         fent = kamera_y - self.beallitasok.alma_rajzolas_puffer
@@ -1694,7 +2369,7 @@ class VilagAllapot:
                             return eredmeny
         return eredmeny
 
-    def _forditas_korlatozva(self, aktualis_dx: float, aktualis_dy: float, cel_dx: float, cel_dy: float) -> Tuple[float, float]:
+    def _forditas_korlatozva(self, aktualis_dx, aktualis_dy, cel_dx, cel_dy):
         aktualis_szog = math.atan2(aktualis_dy, aktualis_dx)
         cel_szog = math.atan2(cel_dy, cel_dx)
 
@@ -1717,19 +2392,19 @@ class VilagAllapot:
         return math.cos(uj_szog), math.sin(uj_szog)
 
 
-    # ===== 4. CSAK TANKOS MÓD =====
+    # ----------------------------- CSAK TANKOS MÓD -----------------------------
 
     def tankos_kezdes(self, kep= None):
-        self.terkep_tank = Tank_Terkep(
-            self.beallitasok.tank_vilag_szelesseg,
-            self.beallitasok.tank_vilag_magassag,
-            cella=90
-        )
+        self.terkep_tank = Tank_Terkep(self, self.tank_szeleseg, self.tank_magassag, cella=90)
+        
+        self.chestek = [chest for halmaz in self.terkep_tank.chest_racs.values() for chest in halmaz]
+        for chest in self.chestek:
+            self.tank_chest_racsba_rakas(chest)
 
         self.beallitasok.vilag_szelesseg = self.terkep_tank.SZEL * self.terkep_tank.CELLA
         self.beallitasok.vilag_magassag = self.terkep_tank.MAG * self.terkep_tank.CELLA
-    
-        for _ in range(self.beallitasok.nehezseg_atvalto[self.nehezseg_szint]):
+        
+        for _ in range(self.ai_db):
             x, y = self._tankos_spawn_pozicio()
             nev = random.choice(NEVEK)
             azonosito = self.eddigi_tankok_npc
@@ -1738,12 +2413,15 @@ class VilagAllapot:
                 uj.tank_kep_nev = kep
                 self.tank
             #self.tank_ellensegek.append(uj)
+            uj.dontes_fazis = self.dontes_kiosztas
+            self.dontes_kiosztas += 1
+            if self.dontes_kiosztas >= uj.dontes_gyakorisag:
+                self.dontes_kiosztas = 0
             self.jatekosok[azonosito] = uj
             self.tank_jatekos_racs_hozzaad(uj)
             self.eddigi_tankok_npc += 1
 
-
-    def _tankos_spawn_pozicio(self) -> Tuple[float, float]:
+    def _tankos_spawn_pozicio(self):
         if self.terkep_tank is None:
             return 200.0, 200.0
 
@@ -1797,20 +2475,9 @@ class VilagAllapot:
 
         return True
 
-    def tankos_mozgas_beallitasa(self, azonosito: str, balra: bool, jobbra: bool, fel: bool, le: bool, loves: bool):
-        if self.jatek_mode not in ("tankos"):
-            return
-
-        jatekos = self.jatekosok.get(azonosito)
-
-        if isinstance(jatekos, Tanki):
-            jatekos.mozog_balra = balra
-            jatekos.mozog_jobbra = jobbra
-            jatekos.mozog_fel = fel
-            jatekos.mozog_le = le
-            jatekos.loves = loves# or jatekos.loves
-
-    def _mozgas_tankos_jatekosok(self, delta_ido) -> None:
+    
+    # mozgas
+    def _mozgas_tankos_jatekosok(self, delta_ido) :
         for jatekos in self.jatekosok.values():
             if not isinstance(jatekos, Tanki):
                 continue
@@ -1825,6 +2492,8 @@ class VilagAllapot:
 
             if jatekos.mozog_jobbra:
                 jatekos.fok += fordulasi_sebesseg * delta_ido
+
+            
 
             jatekos.fok = jatekos.fok % 360
 
@@ -1850,12 +2519,23 @@ class VilagAllapot:
             uj_x = max(jatekos.sugar, min(self.beallitasok.vilag_szelesseg - jatekos.sugar, uj_x))
             uj_y = max(jatekos.sugar, min(self.beallitasok.vilag_magassag - jatekos.sugar, uj_y))
 
-            if self._tankos_pozicio_jarhato(uj_x, uj_y, jatekos.sugar):
+            if self._tankos_pozicio_jarhato(uj_x, uj_y, jatekos.sugar) and self._tank_pozicio_szabad(jatekos, uj_x, uj_y):
                 jatekos.x = uj_x
                 jatekos.y = uj_y
+                for i in range(-2, 3):
+                    for j in range(-2, 3):
+                        jatekos_hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, jatekos.x, jatekos.y)
+                        hely = jatekos_hely[0] - i, jatekos_hely[1] - j
+                        for chest in self.racs_vilag_chestdrop[hely[0], hely[1]]:
+                            if KorSeged.korok_utkozne_e(chest.x, chest.y, chest.sugar, jatekos.x, jatekos.y, jatekos.sugar):
+                                chest.kincs_lathato = False
+                                definicio = getattr(Buffok, chest.buff[:-1] if chest.buff is not "teleport" else chest.buff)
+                                self.tank_chestdrop_racsbol_torles(chest)
+                                jatekos.buff_hozzaadasa(chest.buff, definicio, chest.ertek, chest.ido)
+                                break
                 self.tank_jatekos_racs_frissit(jatekos)
 
-    def _tankos_mod_frissites(self, delta_ido) -> None:
+    def _tankos_mod_frissites(self, delta_ido) :
         if not self.jatekosok:
             return
 
@@ -1873,13 +2553,17 @@ class VilagAllapot:
                     racs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, lovedek_x, lovedek_y)
                     lovedek = Lovedek(self.lovedek_azonosito, jatekos.azonosito, lovedek_x, lovedek_y, irany_x, irany_y)
                     lovedek.utolso_racs = racs
+                    jatekos.tuzelt = True
                     self.lovedekek.append(lovedek)
                     self.racs_vilag_lovedekek[racs].add(lovedek)
                     
                     self.lovedek_azonosito += 1
+                    
+            jatekos.buff_kezelo(delta_ido)
         self.tank_npc_mozgatas_loves(delta_ido)
         self.lovedek_racs_frisitese_mozgatasa(delta_ido)
         self._mozgas_tankos_jatekosok(delta_ido)
+        self.chest_potlas()
 
     def tank_jatekos_racs_hozzaad(self, jatekos):
         kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, jatekos.x, jatekos.y)
@@ -1900,6 +2584,26 @@ class VilagAllapot:
 
         jatekos.utolso_racs = None
 
+    def tank_chest_racsbol_torles(self, chest):
+        hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, chest.x, chest.y)
+        halmaz = self.racs_vilag_chest.get(hely)
+        if halmaz is not None:
+            halmaz.discard(chest)
+            if not halmaz:
+                del self.racs_vilag_chest[hely]
+
+    def tank_chestdrop_racsbol_torles(self, chest):
+        hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, chest.x, chest.y)
+        halmaz = self.racs_vilag_chestdrop.get(hely)
+        if halmaz is not None:
+            halmaz.discard(chest)
+            if not halmaz:
+                del self.racs_vilag_chestdrop[hely]
+
+    def tank_chest_racsba_rakas(self, chest):
+        hely = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, chest.x, chest.y)
+        self.racs_vilag_chest[hely[0], hely[1]].add(chest)
+
     def tank_jatekos_racs_frissit(self, jatekos):
         uj_kulcs = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, jatekos.x, jatekos.y)
 
@@ -1918,6 +2622,39 @@ class VilagAllapot:
             if not lovedek.el:
                 continue
 
+
+            kov_x = lovedek.x + lovedek.irany_x * lovedek.sebesseg * delta_ido
+            kov_y = lovedek.y + lovedek.irany_y * lovedek.sebesseg * delta_ido
+            oszlop, sor = self.terkep_tank.csempe_hely(kov_x, kov_y)
+            try:
+                if self.terkep_tank.racs[sor, oszlop] == 3:
+                    for chest in self.chestek:
+
+                        if not isinstance(chest, Chest):
+                            continue
+
+                        if not chest.el:
+                            continue
+
+                        
+
+                        if chest.cella_x == oszlop and chest.cella_y == sor:
+                            Buffok.hp(chest, -lovedek.sebzes)
+                            #lovedek.el = False
+
+                            if chest.hp <= 0:
+                                chest.el = False
+                                chest.kincs_lathato = True
+                                self.aktualis_chest_db -=1
+                                self.terkep_tank.adott_cella_ertek_atiras(chest.x // self.terkep_tank.CELLA, chest.y // self.terkep_tank.CELLA, 0)
+                                x, y = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, chest.x, chest.y)
+                                self.racs_vilag_chestdrop[x, y].add(chest)
+                                self.tank_chest_racsbol_torles(chest)
+                                self.chestek.remove(chest)
+                                
+                            break
+            except:
+                pass
             lovedek.mozgas(delta_ido, self._tankos_pozicio_jarhato)
 
             if not lovedek.el:
@@ -1943,13 +2680,7 @@ class VilagAllapot:
     def lovedek_talalat_jatekoson_raccsal(self, lovedek):
         keresesi_sugar = lovedek.sugar + self.beallitasok.jatekos_sugar
 
-        for kulcs in KorSeged.szomszed_kulcsok(
-            self.beallitasok.racsok_nagysaga,
-            lovedek.x,
-            lovedek.y,
-            keresesi_sugar,
-            1
-        ):
+        for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga,lovedek.x, lovedek.y, keresesi_sugar, 1):
             for jatekos_id in list(self.racs_vilag_tank_jatekosok.get(kulcs, [])):
                 jatekos = self.jatekosok.get(jatekos_id)
 
@@ -1959,19 +2690,11 @@ class VilagAllapot:
                 if not jatekos.el:
                     continue
 
-                # sajat test elenorzese
                 #if jatekos.azonosito == lovedek.tulajdonos_id:
                 #    continue
 
-                if KorSeged.korok_utkozne_e(
-                    lovedek.x,
-                    lovedek.y,
-                    lovedek.sugar,
-                    jatekos.x,
-                    jatekos.y,
-                    jatekos.sugar
-                ):
-                    jatekos.hp -= lovedek.sebzes
+                if KorSeged.korok_utkozne_e(lovedek.x, lovedek.y, lovedek.sugar, jatekos.x, jatekos.y, jatekos.sugar):
+                    Buffok.hp(jatekos, -lovedek.sebzes)
                     
                     for j, i in self.jatekosok.items():
                         if i.azonosito == (lovedek.tulajdonos_id):
@@ -1986,10 +2709,11 @@ class VilagAllapot:
                         del self.jatekosok[jatekos.azonosito]
 
                     return True
+        
 
         return False
 
-    def _lathato_lovedekek(self, kamera_x: float, kamera_y: float, szelesseg: int, magassag: int) -> List[Tuple[float, float]]:
+    def _lathato_lovedekek(self, kamera_x, kamera_y, szelesseg, magassag):
         bal = kamera_x - self.beallitasok.alma_rajzolas_puffer
         jobb = kamera_x + szelesseg + self.beallitasok.alma_rajzolas_puffer
         fent = kamera_y - self.beallitasok.alma_rajzolas_puffer
@@ -2002,6 +2726,21 @@ class VilagAllapot:
                 for lovedek in self.racs_vilag_lovedekek.get((cx, cy), []):
                     if bal < lovedek.x < jobb and fent < lovedek.y < lent:
                         eredmeny.append((lovedek.allapot_dict()))
+        return eredmeny
+    
+    def _lathato_chestek(self, kamera_x, kamera_y, szelesseg, magassag):
+        bal = kamera_x - self.beallitasok.alma_rajzolas_puffer
+        jobb = kamera_x + szelesseg + self.beallitasok.alma_rajzolas_puffer
+        fent = kamera_y - self.beallitasok.alma_rajzolas_puffer
+        lent = kamera_y + magassag + self.beallitasok.alma_rajzolas_puffer
+        start_cx, start_cy = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, bal, fent)
+        end_cx, end_cy = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, jobb, lent)
+        eredmeny = []
+        for cx in range(start_cx - 1, end_cx + 2):
+            for cy in range(start_cy - 1, end_cy + 2):
+                for chest in self.racs_vilag_chestdrop.get((cx, cy), []):
+                    if bal < chest.x < jobb and fent < chest.y < lent and chest.kincs_lathato:
+                        eredmeny.append((chest.allapot_dict()))
         return eredmeny
 
     def tankos_lathato_terkep_resz(self, kamera_x, kamera_y, szelesseg, magassag):
@@ -2034,7 +2773,7 @@ class VilagAllapot:
             "adatok": resz.tolist()
         }
 
-    def van_fal_ket_pont_kozott(self, x1, y1, x2, y2) -> bool:
+    def van_fal_ket_pont_kozott(self, x1, y1, x2, y2):
         """True = van fal a két pont között, False = nincs fal."""
     
         oszlop1, sor1 = self.terkep_tank.csempe_hely(x1, y1)
@@ -2071,7 +2810,15 @@ class VilagAllapot:
             if not self.terkep_tank.jarhato(aktualis_sor, aktualis_oszlop):
                 return True
             
-
+    def chest_potlas(self):
+        if self.aktualis_chest_db < self.max_chest:
+            chest = self.terkep_tank.chest_generalas(self.chest_azonosito)
+            if chest is None:
+                return
+            self.chestek.append(chest)
+            self.tank_chest_racsba_rakas(chest)
+            self.aktualis_chest_db +=1
+            self.chest_azonosito += 1
     # npc
 
     def _tank_celpont_kereses(self, tank: Tanki):
@@ -2100,10 +2847,8 @@ class VilagAllapot:
 
         return legjobb
 
-
-
-    def _tank_celoz_pont_fele(self, tank: Tanki, cel_x: float, cel_y: float, delta_ido: float) -> None:
-        fordulasi_sebesseg = getattr(tank, "fordulasi_sebesseg", 180.0)  # fok / másodperc
+    def _tank_celoz_pont_fele(self, tank: Tanki, cel_x, cel_y, delta_ido) :
+        fordulasi_sebesseg = getattr(tank, "fordulasi_sebesseg", 180.0)
 
         dx = cel_x - tank.x
         dy = cel_y - tank.y
@@ -2124,9 +2869,7 @@ class VilagAllapot:
 
         tank.fok = (tank.fok + kulonbseg) % 360
 
-
-    def _tank_mozgas_pont_fele(self, tank: Tanki, cel_x: float, cel_y: float, delta_ido, tavolsag_tartas: float = 80.0) -> None:
-        """NPC tank elindul egy célpont felé."""
+    def _tank_mozgas_pont_fele(self, tank: Tanki, cel_x, cel_y, delta_ido, tavolsag_tartas = 80.0) :
 
         tank.mozog_balra = False
         tank.mozog_jobbra = False
@@ -2140,9 +2883,9 @@ class VilagAllapot:
         if tav > tavolsag_tartas:
             tank.mozog_fel = True
 
-
     def _tank_lovedek_veszely_pont(self, tank: Tanki):
         x, y = KorSeged.kulcs(self.beallitasok.racsok_nagysaga, tank.x, tank.y)
+        
 
         for i in range(-2, 3):
             for j in range(-2, 3):
@@ -2186,11 +2929,33 @@ class VilagAllapot:
 
         return None
 
+    def _tank_keres_lathato_pontot(self, tank: Tanki, x, y):
+        if self.frissitesi_szamlalo % tank.dontes_gyakorisag != tank.dontes_fazis:
+            return None
 
-    def _tank_keres_lathato_pontot(self, tank: Tanki, celpont: Tanki):
         if self.terkep_tank is None:
             return None
 
+
+        tud_mozogni = False
+        lepes = tank.sugar * 1.0 
+        
+        iranyok = [
+            (0, -lepes), (0, lepes), (-lepes, 0), (lepes, 0),
+            (-lepes, -lepes), (lepes, -lepes), (-lepes, lepes), (lepes, lepes)
+        ]
+        
+        for dx, dy in iranyok:
+            teszt_x = tank.x + dx
+            teszt_y = tank.y + dy
+            
+            if self._tankos_pozicio_jarhato(teszt_x, teszt_y, tank.sugar):
+                if self._tank_pozicio_szabad(tank, teszt_x, teszt_y):
+                    tud_mozogni = True
+                    break
+
+        if not tud_mozogni:
+            return
         cella = self.terkep_tank.CELLA
 
         start_oszlop, start_sor = self.terkep_tank.csempe_hely(tank.x, tank.y)
@@ -2218,15 +2983,22 @@ class VilagAllapot:
             (0, -1),
             (0, 1),
         ]
-
+        pontok = []
         while sorban:
             sor, oszlop = sorban.popleft()
 
             cel_x = oszlop * cella + cella / 2
             cel_y = sor * cella + cella / 2
+            
 
-            if not self.van_fal_ket_pont_kozott(cel_x, cel_y, celpont.x, celpont.y):
+
+            if not self.van_fal_ket_pont_kozott(cel_x, cel_y, x, y):
                 aktualis = (sor, oszlop)
+
+                if not self._tank_pozicio_szabad(tank, cel_x, cel_y):
+                    continue
+
+                
 
                 while honnan_jott.get(aktualis) is not None and honnan_jott[aktualis] != start:
                     aktualis = honnan_jott[aktualis]
@@ -2235,8 +3007,15 @@ class VilagAllapot:
 
                 lep_x = lep_oszlop * cella + cella / 2
                 lep_y = lep_sor * cella + cella / 2
+                fal_db = self._tank_kornyezo_falak_szama(sor, oszlop)
 
-                return lep_x, lep_y
+                pontszam = KorSeged.tavolsag(tank.x, tank.y, cel_x, cel_y) * 10
+                pontszam += KorSeged.tavolsag(tank.x, tank.y, lep_x, lep_y) * 2
+                pontszam += fal_db * 300
+                pontszam += KorSeged.tavolsag(cel_x, cel_y, x, y) * 0.2
+                pontok.append((pontszam, lep_x, lep_y))
+
+                #return lep_x, lep_y
 
             for ds, do in iranyok:
                 uj_sor = sor + ds
@@ -2259,27 +3038,41 @@ class VilagAllapot:
                 uj_x = uj_oszlop * cella + cella / 2
                 uj_y = uj_sor * cella + cella / 2
 
-                if not self._tankos_pozicio_jarhato(uj_x, uj_y, tank.sugar):
+                if not self._tankos_pozicio_jarhato(uj_x, uj_y, tank.sugar+ 15):
                     continue
 
                 volt_mar.add(kulcs)
                 honnan_jott[kulcs] = (sor, oszlop)
                 sorban.append(kulcs)
 
-        return None
+        if len(pontok) == 0:
+            return None
+        
+        legkisebb = pontok[0]
+    
+        legjobb = min(pontok, key=lambda p: p[0])
+        return legjobb[1], legjobb[2]
 
+
+    def _tank_kornyezo_falak_szama(self, sor, oszlop):
+        fal_db = 0
+
+        for ds, do in [(-1,0), (1,0), (0,-1), (0,1)]:
+            if not self.terkep_tank.jarhato(sor + ds, oszlop + do):
+                fal_db += 1
+
+        return fal_db
 
     def tank_npc_mozgatas_loves(self, delta_ido):
         lotav = 1100.0
         idealis_lotav = 700.0
+        self.frissitesi_szamlalo += 1
 
-        for tank in self.jatekosok.values():
+        for tank in list(self.jatekosok.values()):
             if not isinstance(tank, Tanki):
                 continue
-
             if not tank.el:
                 continue
-
             if tank.jatekos_e:
                 continue
 
@@ -2292,38 +3085,326 @@ class VilagAllapot:
             kitero_pont = self._tank_lovedek_veszely_pont(tank)
 
             if kitero_pont is not None:
-                self._tank_mozgas_pont_fele(tank, kitero_pont[0], kitero_pont[1], delta_ido, tavolsag_tartas=10.0)
+                tank.alapot = "kitero"
+                self._tank_mozgas_pont_fele(
+                    tank,
+                    kitero_pont[0],
+                    kitero_pont[1],
+                    delta_ido,
+                    tavolsag_tartas=10.0
+                )
                 continue
 
             celpont = self._tank_celpont_kereses(tank)
 
             if celpont is None:
+                tank.alapot = "jarorozes"
+                self.jarorozes(tank, delta_ido)
                 continue
 
             tav = KorSeged.tavolsag(tank.x, tank.y, celpont.x, celpont.y)
-            van_fal = self.van_fal_ket_pont_kozott(tank.x, tank.y, celpont.x, celpont.y)
+            van_fal = self.van_fal_ket_pont_kozott(
+                tank.x,
+                tank.y,
+                celpont.x,
+                celpont.y
+            )
 
             if tav <= lotav and not van_fal:
+                tank.alapot = "tamadas"
+
                 self._tank_celoz_pont_fele(tank, celpont.x, celpont.y, delta_ido)
+
                 tank.loves = True
 
                 if tav > idealis_lotav:
                     tank.mozog_fel = True
+
                 continue
 
-            lathato_pont = self._tank_keres_lathato_pontot(tank, celpont)
+            tank.alapot = "vadaszat"
+
+            lathato_pont = self._tank_keres_lathato_pontot(tank, celpont.x, celpont.y)
 
             if lathato_pont is not None:
                 self._tank_mozgas_pont_fele(tank, lathato_pont[0], lathato_pont[1], delta_ido, tavolsag_tartas=40.0)
             else:
                 self._tank_mozgas_pont_fele(tank, celpont.x, celpont.y, delta_ido, tavolsag_tartas=idealis_lotav)
+            
+    def jarorozes(self, tank, delta_ido):
+        if not isinstance(tank, Tanki):
+            return
+        if not tank.el:
+            return
+        if tank.jatekos_e:
+            return
+        if self.terkep_tank is None:
+            return
+
+        cella = self.terkep_tank.CELLA
+        
+        
+
+        if tank.jaror_cel_kordinata is None:
+            tank.jarorozes_figyelo["ido"] = 0.0
+            tank_oszlop, tank_sor = self.terkep_tank.csempe_hely(tank.x, tank.y)
+
+            for _ in range(80):
+                sor = random.randint(tank_sor - 10, tank_sor + 10)
+                oszlop = random.randint(tank_oszlop - 10, tank_oszlop + 10)
+
+                if sor < 1 or sor >= self.terkep_tank.MAG - 1:
+                    continue
+
+                if oszlop < 1 or oszlop >= self.terkep_tank.SZEL - 1:
+                    continue
+
+                if not self.terkep_tank.jarhato(sor, oszlop):
+                    continue
+
+                cel_x = oszlop * cella + cella / 2
+                cel_y = sor * cella + cella / 2
+
+                if not self._tankos_pozicio_jarhato(cel_x, cel_y, tank.sugar):
+                    continue
+
+                tank.jaror_cel_kordinata = (sor, oszlop)
+                break
+
+            if tank.jaror_cel_kordinata is None:
+                return
+        
+        tank.jarorozes_figyelo["ido"] += delta_ido
+
+        if tank.jarorozes_figyelo["ido"] >= 1.0:
+            regi = tank.jarorozes_figyelo["kordinata"]
+
+            if regi is not None:
+                mozgas = KorSeged.tavolsag(tank.x, tank.y, regi[0], regi[1])
+
+                if mozgas < 5:
+                    tank.jaror_cel_kordinata = None
+
+            tank.jarorozes_figyelo["kordinata"] = (tank.x, tank.y)
+            tank.jarorozes_figyelo["ido"] = 0.0
+            return
+
+
+        cel_sor, cel_oszlop = tank.jaror_cel_kordinata
+
+        cel_x = cel_oszlop * cella + cella / 2
+        cel_y = cel_sor * cella + cella / 2
+
+        if KorSeged.tavolsag(tank.x, tank.y, cel_x, cel_y) < 45:
+            tank.jaror_cel_kordinata = None
+            return
+
+        if not self.van_fal_ket_pont_kozott(tank.x, tank.y, cel_x, cel_y):
+            self._tank_mozgas_pont_fele(
+                tank,
+                cel_x,
+                cel_y,
+                delta_ido,
+                tavolsag_tartas=40.0
+            )
+            return
+
+        kovetkezo_pont = self._tank_keres_lathato_pontot(tank, cel_x, cel_y)
+
+        if kovetkezo_pont is not None:
+            self._tank_mozgas_pont_fele(
+                tank,
+                kovetkezo_pont[0],
+                kovetkezo_pont[1],
+                delta_ido,
+                tavolsag_tartas=40.0
+            )
+        else:
+            tank.jaror_cel_kordinata = None
+
+    def _tank_pozicio_szabad(self, tank, x, y, puffer=8):
+        keresesi_sugar = tank.sugar * 2 + puffer
+
+        for kulcs in KorSeged.szomszed_kulcsok(self.beallitasok.racsok_nagysaga, x, y, keresesi_sugar, 1):
+            for masik_id in self.racs_vilag_tank_jatekosok.get(kulcs, []):
+                if masik_id == tank.azonosito:
+                    continue
+
+                masik = self.jatekosok.get(masik_id)
+
+                if not isinstance(masik, Tanki):
+                    continue
+                if not masik.el:
+                    continue
+
+                minimum_tav = tank.sugar + masik.sugar + puffer
+
+                if KorSeged.tavolsag(x, y, masik.x, masik.y) < minimum_tav:
+                    return False
+
+        return True
+        
+    # ----------------------------- CSAK platformeres MÓD -----------------------------
+    def _platformer_frissites(self, delta_ido):
+        for jatekos in self.jatekosok.values():
+            self.jatekos_mozgas(jatekos, delta_ido)
+            
+
+    def platformer_kezdes(self, jelenlegi_szoba):
+        self.platformer_file_helye = os.path.join(os.path.dirname(__file__), "platformer_szobak")
+        self.jelenlegi_szoba = jelenlegi_szoba
+        self.platformer_terkep = None
+        self.platformer_spone_point = []
+        self.platformer_szoba_valtas = False
+        
+
+
+        self.platformer_terkep_betolto(self.jelenlegi_szoba)
+
+   
+    def platformer_terkep_betolto(self, szoba=None):
+        fajl = os.path.join(os.path.dirname(__file__), "p1.ldtk")
+
+        self.platformer_terkep = ldtk_terkep_betoltes(fajl, szoba if szoba else None)
+
+        self.jelenlegi_szoba = self.platformer_terkep["szoba"]
+            
+
+    def jatekos_mozgas(self, jatekos: P_elolenyek, delta_ido):
+        bottom_y = jatekos.y 
+        higtest_y = jatekos.y - jatekos.height
+        midle_1_y = jatekos.y - jatekos.height // 5 * 2
+        midle_2_y = jatekos.y - jatekos.height // 5 * 4
+        bottom_left_x = jatekos.x
+        bottom_right_x = jatekos.x + jatekos.width
+
+        jatekos.acc.x = 0
+        ugras, eses, balra, jobbra = False, False, False, False
+
+        if jatekos.mozog_balra:
+            jatekos.acc.x = -self.acc * delta_ido * self.beallitasok.platformer_jatekos_mozgas_szorzo
+            balra = True
+        if jatekos.mozog_jobbra:
+            jatekos.acc.x = self.acc * delta_ido * self.beallitasok.platformer_jatekos_mozgas_szorzo
+            jobbra = True
+        if jatekos.mozog_balra and jatekos.mozog_jobbra:
+            jatekos.acc.x = 0
+            balra, jobbra = False, False
+
+        racs_meret = self.platformer_terkep["platform_racs_meret"]
+        platform_racs = self.platformer_terkep["platform_racs"]
+
+        puffer = racs_meret * 2
+        min_cella_x = int((jatekos.pos.x - puffer) // racs_meret)
+        max_cella_x = int((jatekos.pos.x + jatekos.width + puffer) // racs_meret)
+        min_cella_y = int((jatekos.pos.y - puffer) // racs_meret)
+        max_cella_y = int((jatekos.pos.y + jatekos.height + puffer) // racs_meret)
+
+        szilard_testek = []
+
+        for cella_y in range(min_cella_y, max_cella_y + 1):
+            for cella_x in range(min_cella_x, max_cella_x + 1):
+                block = platform_racs.get((cella_x, cella_y))
+                if block is not None:
+                    szilard_testek.append(block)
+
+        if jatekos.jump and jatekos.dare_i_jump:
+            jatekos.vel.y = self.beallitasok.platformer_ugras
+            jatekos.dare_i_jump = False
+            jatekos.can_i_jump = True
+        elif not jatekos.jump and jatekos.vel.y <0 and jatekos.can_i_jump:
+            jatekos.vel.y *= 0.5
+            jatekos.can_i_jump = False
+        """elif jatekos.jump and jatekos.jumping <= 10 and jatekos.vel.y < 0 and jatekos.can_i_jump:
+            jatekos.jumping_szamlalo += 1
+            if jatekos.jumping_szamlalo % 1 == 0:
+                jatekos.jumping += 1
+        else:
+            if jatekos.jumping >= 10:
+                string = "1.0"# + str(jatekos.jumping)[-1]
+            else: string = "0." + str(jatekos.jumping)
+            if string == "0.0":
+                pass
+            else:
+                jatekos.vel.y = jatekos.vel.y*float(string)
+                print("ugrot")
+                print(string)
+                jatekos.jumping = 0
+                jatekos.jumping_szamlalo=0
+                jatekos.can_i_jump = False"""
+
+        if -6 <= jatekos.vel.y <= 1:
+            self.gravitacio  = max(self.gravitacio - 0.1, 0.5)
+        else: self.gravitacio = min(self.gravitacio+0.1, self.alap_gravitacio)
 
 
 
 
 
+        jatekos.vel.y = min(jatekos.vel.y + self.gravitacio, self.max_gravitacio)
 
-def kodbol_port(kod: str, beallitasok: Optional[Beallitasok] = None) -> int:
+        jatekos.acc.x -= jatekos.vel.x * self.gyorsulas_csokentes
+        jatekos.vel.x += jatekos.acc.x
+        jatekos.pos.x += jatekos.vel.x  
+
+        for block in szilard_testek:
+            bx, by, bw, bh = block.get("x"), block.get("y"), block.get("width"), block.get("height")
+            
+            
+            if (jatekos.pos.x < bx + bw and jatekos.pos.x + jatekos.width > bx and jatekos.pos.y < by + bh and jatekos.pos.y + jatekos.height > by):
+                
+                if jatekos.vel.x > 0: 
+                    jatekos.pos.x = bx - jatekos.width
+                    jatekos.vel.x = 0
+                    jobbra = False
+                elif jatekos.vel.x < 0:  
+                    jatekos.pos.x = bx + bw
+                    jatekos.vel.x = 0
+                    balra = False
+
+       
+        jatekos.vel.y += jatekos.acc.y
+        jatekos.pos.y += jatekos.vel.y  
+
+        for block in szilard_testek:
+            bx, by, bw, bh = block.get("x"), block.get("y"), block.get("width"), block.get("height")
+            
+            if (jatekos.pos.x < bx + bw and jatekos.pos.x + jatekos.width > bx and jatekos.pos.y < by + bh and jatekos.pos.y + jatekos.height > by):
+                
+                if jatekos.vel.y > 0:
+                    jatekos.pos.y = by - jatekos.height
+                    jatekos.vel.y = 0
+                    jatekos.dare_i_jump = True
+                
+                elif jatekos.vel.y < 0:
+                    jatekos.pos.y = by + bh
+                    jatekos.vel.y = 0
+
+        if jatekos.vel.y != 0:
+            jatekos.dare_i_jump = False
+        
+        jatekos.x = jatekos.pos.x
+        jatekos.y = jatekos.pos.y
+        jatekos.akcio = []
+
+        if ugras or jatekos.vel.y < 0:
+            jatekos.akcio = "Jump Start"
+        elif eses or jatekos.vel.y > 0:
+            jatekos.akcio = "Falling Down"
+        #else:
+        #    jatekos.akcio = "Idle"
+        if jobbra and balra or not balra and not jobbra and not ugras:
+            jatekos.irany = 0
+        elif jobbra:
+            jatekos.irany = 1
+        elif balra:
+            jatekos.irany = -1
+
+        jatekos.kamera.mozgas(jatekos.x, jatekos.y, jatekos.width, jatekos.height, jatekos.irany)
+
+
+
+def kodbol_port(kod, beallitasok = None):
     b = beallitasok or Beallitasok()
     szam = int(kod)
     return b.szerver_alap_port + (szam % b.szerver_port_tartomany)
