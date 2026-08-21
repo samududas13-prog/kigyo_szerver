@@ -223,7 +223,7 @@ class KozpontiSzerver:
                 elif tipus == "sebesseg" and szoba.jatek_mode == "alma":
                     szoba.vilag.jatekos_gyorsitas_beallitasa(kapcsolat.azonosito, bool(adat.get("gyors", False)))
                 elif tipus == "mozgas" and szoba.jatek_mode in ["tankos", "platformer"]:
-                    szoba.vilag.tankos_mozgas_beallitasa(
+                    szoba.vilag.mozgas_beallitas(
                         kapcsolat.azonosito,
                         bool(adat.get("balra", False)),
                         bool(adat.get("jobbra", False)),
