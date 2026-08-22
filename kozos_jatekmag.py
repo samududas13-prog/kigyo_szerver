@@ -1425,7 +1425,7 @@ class VilagAllapot:
             self.jatekosok[azonosito] = uj
             self.tank_jatekos_racs_hozzaad(uj)
         elif self.jatek_mode == "platformer":
-            x, y = 600, 600
+            x, y = 1200, 600
             uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok, kep)
             uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
             self.jatekosok[azonosito] = uj
