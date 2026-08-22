@@ -580,7 +580,6 @@ class P_elolenyek:
         self.utes_cooldown_alap = self.utes_cooldown-0.5
         self.eltelt_ido = 0.0
         self.utolso_racs = None
-        self.tank_kep_nev = random.choice(beallitasok.tank_kepek)
         self.jatekos_e = False
         self.gondolkozasi_ido = 5
         self.olesek = 0
@@ -635,7 +634,6 @@ class P_elolenyek:
             "hp": self.hp,
             "el": self.el,
             "eltelt_ido": self.eltelt_ido,
-            "kep": self.tank_kep_nev,
             "olesek": self.olesek,
             "pontok": self.talalatok,
             "max_hp": self.alap_hp,
@@ -1426,6 +1424,7 @@ class VilagAllapot:
             self.tank_jatekos_racs_hozzaad(uj)
         elif self.jatek_mode == "platformer":
             x, y = 1200, 1200
+            print(kep)
             uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok, kep)
             uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
             self.jatekosok[azonosito] = uj
@@ -1506,7 +1505,8 @@ class VilagAllapot:
         jatekos = self.jatekosok.get(azonosito)
         #
         # jatekos.kamera.kepernyo_szelesseg = szelesseg
-        jatekos.kamera.kepernyo_magassag = magassag
+        if self.jatek_mode == "platformer":
+            jatekos.kamera.kepernyo_magassag = magassag
 
         allapot = {
             "tipus": "nagy",
