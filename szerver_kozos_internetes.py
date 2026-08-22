@@ -82,7 +82,7 @@ class SzobaAdat:
                 self.fut = False
                 break
 
-    async def jatekos_hozzaadasa(self, kapcsolat: KapcsolatAdat, tank):
+    async def jatekos_hozzaadasa(self, kapcsolat: KapcsolatAdat, kep):
         kapcsolat.azonosito = self.uj_azonosito()
         kapcsolat.szoba_kod = self.kod
         kapcsolat.csatlakozott = True
@@ -91,8 +91,8 @@ class SzobaAdat:
         if self.kapcsolat_adatcsomag_szetosztas_szamolas >= self.beallitasok.szerver_kliens_szabályuzott_kuldes:
             self.kapcsolat_adatcsomag_szetosztas_szamolas = 0
         self.kapcsolatok[kapcsolat.azonosito] = kapcsolat
-        tank = tank
-        self.vilag.jatekos_hozzaadasa(kapcsolat.azonosito, kapcsolat.nev, kapcsolat.szin, tank)
+        kep = kep
+        self.vilag.jatekos_hozzaadasa(kapcsolat.azonosito, kapcsolat.nev, kapcsolat.szin, kep)
         return kapcsolat.azonosito
 
     async def jatekos_torlese(self, azonosito):
