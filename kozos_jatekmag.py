@@ -59,7 +59,7 @@ class Beallitasok:
         self.pause_gomb_szelesseg = 200 
         self.pause_gomb_magassag = 50 
         
-        self.szoba_kod_hossz = 2 
+        self.szoba_kod_hossz = 5
         self.szerver_alap_port = 20000 
         self.szerver_port_tartomany = 30000 
         self.felfedezo_port = 37021  
@@ -554,7 +554,7 @@ class Vector:
         return f"Vector2({self.x}, {self.y})"
     
 class P_elolenyek:
-    def __init__(self, azonosito: str, nev: str, x: float, y: float, sugar, k_magassag: int, k_szelleseg: int, beallitasok: Beallitasok):
+    def __init__(self, azonosito: str, nev: str, x: float, y: float, sugar, k_magassag: int, k_szelleseg: int, beallitasok: Beallitasok, fajta:str):
         self.azonosito = azonosito
         self.nev = nev 
         self.x = x 
@@ -564,6 +564,7 @@ class P_elolenyek:
         self.height = 50
         self.sebesseg = beallitasok.jatekos_sebesseg
         self.alap_sebesseg = self.sebesseg
+        self.fajta = fajta
         self.alap_hp = float(beallitasok.jatekos_hp)
         self.hp = self.alap_hp
         self.el = True 
@@ -625,6 +626,7 @@ class P_elolenyek:
             "nev": self.nev,
             "x": self.x,
             "y": self.y,
+            "kep": self.fajta,
 
             "width": self.width,
             "height": self.height,
@@ -750,8 +752,8 @@ class Kamera:
         self.kepernyo_magassag = kepernyo_magassag
 
         
-        self.holtter_szelesseg = 150
-        self.holtter_magassag = 20
+        self.holtter_szelesseg = 150  
+        self.holtter_magassag = 200   
         
        
         self.fokusz_x = 0
@@ -1423,8 +1425,8 @@ class VilagAllapot:
             self.jatekosok[azonosito] = uj
             self.tank_jatekos_racs_hozzaad(uj)
         elif self.jatek_mode == "platformer":
-            x, y = 50, 50
-            uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok)
+            x, y = 600, 600
+            uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok, kep)
             uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
             self.jatekosok[azonosito] = uj
 
