@@ -1440,6 +1440,9 @@ class VilagAllapot:
         elif isinstance(jatekos, Tanki):
             self.tank_jatekos_racsbol_torles(jatekos)
             del self.jatekosok[azonosito]
+        elif isinstance(jatekos, P_elolenyek):
+            del self.jatekosok[azonosito]
+
 
     def folytatas(self, adatok):
         if isinstance(adatok, tuple):
