@@ -229,7 +229,8 @@ class KozpontiSzerver:
                         bool(adat.get("jobbra", False)),
                         bool(adat.get("fel", False)),
                         bool(adat.get("le", False)),
-                        bool(adat.get("loves", False))
+                        bool(adat.get("loves", False)),
+                        bool(adat.get("ugras", False))
                     )
                 elif tipus == "kep_beallitas":
                     szoba.vilag.kep_meret_bealitas(adat.get("azonosito"), adat.get("width"), adat.get("height"), adat.get("kep"), adat.get("x"), adat.get("y"))
