@@ -573,6 +573,7 @@ class P_elolenyek:
         self.tamadas_szelesseg = 40
         self.tamadas_magassag = 30
         self.el = True 
+        self.tamadas_sebzes = 1
         self.mozog_balra = False 
         self.mozog_jobbra = False 
         self.mozog_fel = False
