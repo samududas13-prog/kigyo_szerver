@@ -3310,14 +3310,6 @@ class VilagAllapot:
         else: self.gravitacio = min(self.gravitacio+0.1, self.alap_gravitacio)
 
 
-        if jatekos.attack:
-            for azonosito, j in self.jatekosok:
-                if jatekos.azonosito == azonosito:
-                    continue
-                if jatekos.pos.x + jatekos.attack_width/3 and jatekos.y - jatekos.height < jatekos.pos.y - jatekos.attack_height / 6 - jatekos.y :
-                    pass
-
-
 
         jatekos.vel.y = min(jatekos.vel.y + self.gravitacio, self.max_gravitacio)
 
