@@ -182,6 +182,11 @@ class KorSeged:
             for ry in range(cy - raszter, cy + raszter + 1):
                 yield rx, ry
 
+    @staticmethod
+    def dobozok_utkozne_e(x1: float, y1: float, sz1: float, m1: float, x2: float, y2: float, sz2: float, m2: float):
+        """x,y: bal-felso sarok; sz: szelesseg; m: magassag"""
+        return x1 < x2 + sz2 and x1 + sz1 > x2 and y1 < y2 + m2 and y1 + m1 > y2
+
 def ldtk_terkep_betoltes(fajl, szoba_nev=None, zoom=4):
     with open(fajl, "r", encoding="utf-8") as f:
         adat = json.load(f)
@@ -214,7 +219,6 @@ def ldtk_terkep_betoltes(fajl, szoba_nev=None, zoom=4):
 
             for index, value in enumerate(layer["intGridCsv"]):
 
-                # 1=dirt, 3=stone
                 if value not in (1, 3):
                     continue
 
@@ -225,7 +229,6 @@ def ldtk_terkep_betoltes(fajl, szoba_nev=None, zoom=4):
                 platformok.append(block)
                 platform_racs[(index % width, index // width)] = block
 
-    # grafikai rétegek alulról felfelé
     for layer in reversed(level["layerInstances"]):
 
         if layer["__identifier"] not in (
@@ -567,6 +570,8 @@ class P_elolenyek:
         self.fajta = fajta
         self.alap_hp = float(beallitasok.jatekos_hp)
         self.hp = self.alap_hp
+        self.tamadas_szelesseg = 40
+        self.tamadas_magassag = 30
         self.el = True 
         self.mozog_balra = False 
         self.mozog_jobbra = False 
@@ -575,6 +580,7 @@ class P_elolenyek:
         self.utes = False
         self.tuzelt = False
         self.jump = False
+        self.attack = False
         self.utes_cooldown = beallitasok.utes_cooldown
         self.utes_idozito = beallitasok.utes_cooldown -0.3
         self.utes_cooldown_alap = self.utes_cooldown-0.5
@@ -598,6 +604,7 @@ class P_elolenyek:
         self.dare_i_jump = True
         self.can_i_jump = False
         self.irany = 0 # 0=elsö nezet állás, 1 jobbra oldalso nezet, 2 balra oldalsonezet, 3 fel első nézet, 4 le also nezet
+        self.attack_rect = None
 
         #['Dying', 'Falling Down', 'Hurt', 'Idle', 'Idle Blinking', 'Jump Loop', 'Jump Start', 'Kicking', 'Run Slashing', 'Run Throwing',
         #'Running', 'Slashing', 'Slashing in The Air', 'Sliding', 'Throwing', 'Throwing in The Air', 'Walking']
@@ -641,6 +648,9 @@ class P_elolenyek:
             "uj_buffok": self.uj_buffok,
             "akcio": self.akcio,
             "irany": self.irany,
+            "fel": self.mozog_fel,
+            "le": self.mozog_le,
+            "attack": self.attack,
 
             "buffok": [
                 {
@@ -652,6 +662,7 @@ class P_elolenyek:
                 for buff in self.buff_gyujto.values() if buff.get("el", True) and buff.get("cel_ido", 0) > 0
             ],
         }
+        self.attack = False
         self.tuzelt = False
         self.uj_buffok = {}
         return alapot
@@ -697,51 +708,6 @@ class P_elolenyek:
             "el": True,
         }
         
-"""class Kamera:
-    def __init__(self, x, y, k_szelesseg, k_magassag):
-        self.kepernyo_valtoztatas(x, y, k_szelesseg, k_magassag)
-        self.vel = Vector(0, 0)
-        self.tavolsag = Vector(0, 0)
-
-    def kepernyo_valtoztatas(self, x, y, k_szelesseg, k_magassag):
-        self.rect = {
-            "x": x+k_szelesseg//2,
-            "y": y+k_magassag//2,
-            "width": k_szelesseg-300,
-            "height": k_magassag-200
-        }
-
-    def mozgas(self, x, y, width, hight):
-        k_x, k_y, k_w, K_h = self.rect.get("x"), self.rect.get("y"), self.rect.get("width"), self.rect.get("height")
-        self.tavolsag.x = self.tavolsag.x + x
-        self.tavolsag.y = self.tavolsag.y + y
-
-
-        "if not (k_x < x < k_x + k_w):
-            self.vel.x += 2
-        elif not (k_x < x + width < k_x + k_w):
-            self.vel.x -= 2
-        if  not (k_y < y < k_y + K_h):
-            self.vel.y += 2
-        elif  not (k_y < y + hight < k_y + K_h):
-            self.vel.y -= 2"
-
-
-
-        if self.tavolsag.x < -30:
-            self.vel.x = max(self.vel.x + 2, 2)
-        elif self.tavolsag.x > 30:
-            self.vel.x = min(self.vel.x - 2, -2)
-
-        if self.tavolsag.y < 30:
-            self.vel.y = max(self.vel.y + 2, 4)
-        elif self.tavolsag.y > -30:
-            self.vel.y = min(self.vel.y - 2, -4)
-
-    def frissites(self):
-        self.rect["x"] = self.rect.get("x") + self.vel.x
-        self.rect["y"] = self.rect.get("y") + self.vel.y
-"""
 class Kamera:
     def __init__(self, kepernyo_szelesseg, kepernyo_magassag):
         self.x = 0
@@ -1665,7 +1631,7 @@ class VilagAllapot:
         allapot["almak"] = self._lathato_almak(kamera_x, kamera_y, szelesseg, magassag)
         return allapot
 
-    def mozgas_beallitas(self, azonosito: str, balra: bool, jobbra: bool, fel: bool, le: bool, loves: bool):
+    def mozgas_beallitas(self, azonosito: str, balra: bool, jobbra: bool, fel: bool, le: bool, loves: bool, jump: bool):
         if self.jatek_mode not in ("tankos", "platformer"):
             return
 
@@ -1678,7 +1644,8 @@ class VilagAllapot:
             if isinstance(jatekos, Tanki):
                 jatekos.loves = loves
             elif isinstance(jatekos, P_elolenyek): # or jatekos.loves
-                jatekos.jump = loves
+                jatekos.jump = jump
+                jatekos.attack = loves
             else: print("nincs ilyen mood  kozos_jatekmag.py -> VilagAllapot -> mozgas_beallitas-ban")
         except:
             pass
@@ -3343,6 +3310,12 @@ class VilagAllapot:
         else: self.gravitacio = min(self.gravitacio+0.1, self.alap_gravitacio)
 
 
+        if jatekos.attack:
+            for azonosito, j in self.jatekosok:
+                if jatekos.azonosito == azonosito:
+                    continue
+                if jatekos.pos.x + jatekos.attack_width/3 and jatekos.y - jatekos.height < jatekos.pos.y - jatekos.attack_height / 6 - jatekos.y :
+                    pass
 
 
 
@@ -3407,6 +3380,39 @@ class VilagAllapot:
 
         jatekos.kamera.mozgas(jatekos.x, jatekos.y, jatekos.width, jatekos.height, jatekos.irany)
 
+
+        jatekos.utes = jatekos.attack
+        if jatekos.tamadas(delta_ido):
+            kozep_x = jatekos.x + jatekos.width / 2
+            kozep_y = jatekos.y - jatekos.height / 2
+ 
+            if jatekos.mozog_fel and not jatekos.mozog_le:
+                hitbox_x = kozep_x - jatekos.tamadas_szelesseg / 2
+                hitbox_y = jatekos.y - jatekos.height - jatekos.tamadas_magassag
+            elif jatekos.mozog_le and not jatekos.mozog_fel:
+                hitbox_x = kozep_x - jatekos.tamadas_szelesseg / 2
+                hitbox_y = jatekos.y
+            else:
+                if jatekos.irany == -1:
+                    hitbox_x = jatekos.x - jatekos.tamadas_szelesseg
+                else:
+                    hitbox_x = jatekos.x + jatekos.width
+                hitbox_y = kozep_y - jatekos.tamadas_magassag / 2
+ 
+            for masik in self.jatekosok.values():
+                if masik.azonosito == jatekos.azonosito:
+                    continue
+                if not masik.el:
+                    continue
+ 
+                if KorSeged.dobozok_utkozne_e(
+                    hitbox_x, hitbox_y, jatekos.tamadas_szelesseg, jatekos.tamadas_magassag,
+                    masik.x, masik.y - masik.height, masik.width, masik.height,
+                ):
+                    Buffok.hp(masik, -jatekos.tamadas_sebzes)
+                    jatekos.talalatok += 1
+                    if masik.hp <= 0:
+                        jatekos.olesek += 1
 
 
 def kodbol_port(kod, beallitasok = None):
