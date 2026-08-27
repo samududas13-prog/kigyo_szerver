@@ -9,7 +9,8 @@ from typing import Tuple
 import pygame
 import websockets
 import socket
-from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot, Vector, ldtk_terkep_betoltes
+from kozos_jatekmag import Beallitasok, SzinSeged, VilagAllapot, Vector
+from p_terkem_beolvasasa import ldtk_terkep_betoltes
 import copy
 from datetime import datetime
 pygame.mixer.init()
@@ -182,38 +183,12 @@ class Buff:
     
 class P_eloleny:
     def __init__(self, kep, golem=1):
-        self.path_to_golems = os.path.join(os.path.dirname(__file__), "tiles", "platformer", "golem", "Golem_" + str(golem))
-        fielok = os.walk(self.path_to_golems)
-        fileok1 = []
-        for i in fielok:
-                    fileok1.append(i)
-
-        akciok = fileok1[0][1]
-        fileok1 = fileok1[1:]
-        szotar = {}
-        torlo = []
-        for index, i in enumerate(fileok1):
-            if i == []:
-                torlo.append(index)
-
-        for i in torlo[:-1]:
-            del fileok1[i]
-
-        for i, j in enumerate(akciok):
-            szotar[j] = fileok1[i][2:]
-
-
-       
-        self.kepek = {}
-        for nev, adat in szotar.items():
-            adatok = []
-            for i in adat[0]:
-                j = self.kep_betolto(os.path.join(nev, i))
-                adatok.append(j)
-            adatok = self.kep_szerkesztes(adatok)
-
-            self.kepek[nev]=adatok
-        print(akciok)
+        self.kepek = kep
+        self.azonosito =  ""
+        self.hp = 100
+        self.talalatok = 0
+        self.olesek = 0
+        
         
         
         self.mozgas_szamlalo = 0
@@ -394,6 +369,7 @@ class HalozatiKliens:
                             "ip_cim": self.ip_cim,
                             "kep": self.kep,
                         }
+                        
                     else:
                         belepes = {
                             "tipus": "szoba_csatlakozas",
@@ -461,6 +437,56 @@ class HalozatiKliens:
                 await asyncio.sleep(0.35)
         self.csatlakozva = False
 
+class Slahs:
+    def __init__(self, kepek, irany_x, irany_y, j_rect):
+        """irany_y: (1: up, 0: midle, -1: down)"""
+        self.kepek = kepek
+        self.irany_x = irany_x
+        self.irany_y = irany_y
+        self.szamlalo_szamlalo = 0
+        self.szamlalo = 0
+        self.max_szamlalo = len(self.kepek)
+        self.j_w = j_rect.width
+        self.j_h = j_rect.width
+
+    def draw(self, screen, x, y, kamera_x, kamera_y):
+        """irany_x: (1: right, -1: left)"""
+        if self.szamlalo_szamlalo % 1 == 0:
+            self.szamlalo += 1
+        if self.szamlalo >= self.max_szamlalo:
+            return True
+        kep = self.kepek[self.szamlalo]
+        if self.irany_y != 0:
+            kep = pygame.transform.rotate(kep, 90 if self.irany_y == 1 else -90)
+        
+        kep = pygame.transform.flip(kep, True if self.irany_x == -1 else False, False)
+        
+            # kep = pygame.transform.rotate(self.kepek[self.szamlalo], 90 if self.irany_y == 1 else -90)
+        
+        #screen.blit(kep, (int(x - kamera_x - 60 - kep.get_width()/2), int(y - kamera_y + 10 - kep.get_height() / 2)))
+        if self.irany_y == 1:          # felfele
+            hely_x = x - kamera_x - self.j_w + kep.get_width()/ 6
+            hely_y = y - kamera_y - self.j_h
+            if self.irany_x == -1:
+                hely_x = x - kamera_x - kep.get_width()/ 6
+        elif self.irany_y == -1:       # lefele
+            hely_x = x - kamera_x - self.j_w#+ kep.get_width()
+            hely_y = y - kamera_y + self.j_h * 2 - kep.get_height()/ 2
+            if self.irany_x == 1:
+                hely_x = x - kamera_x #- self.j_w #kep.get_width()/3
+        else:                            
+            if self.irany_x == -1:
+                hely_x = x - kamera_x - self.j_w #kep.get_width()/3
+            else:
+                hely_x = x - kamera_x + self.j_w - kep.get_width()/2
+            hely_y = y - kamera_y - kep.get_height() / 6
+
+        screen.blit(kep, (int(hely_x), int(hely_y)))
+        # screen.blit(kep, (int(x - kamera_x + kep.get_width()/3), int(y - kamera_y - kep.get_height() / 6)))
+
+        
+        self.szamlalo_szamlalo += 1
+        return False
 
 class Alap:
     MENTES_SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
@@ -468,7 +494,6 @@ class Alap:
         pygame.init()
         self.picture_of_golems = []
         for i in range(1, 4):
-            print(i)
             self.picture_of_golems.append(self.kep_betolto(os.path.join(os.path.dirname(__file__), "tiles", "platformer", "golem", "Golem_" + str(i), "Idle"), "0_Golem_Idle_000.png"))
         self.picture_of_golems = self.kep_korbe_vagasa(self.picture_of_golems)
         self.golem_valaszto_gombok = {}
@@ -516,6 +541,7 @@ class Alap:
         self.szoba_kod_aktiv = False 
         self.szoba_kod_rect = None
         self.settings_szoveg_rect = None
+        self.setting = False
 
 
         self.tiles = os.path.join(os.path.dirname(__file__), "tiles")
@@ -578,6 +604,7 @@ class Alap:
         self.jobb = False
         self.le = False
         self.bal = False
+        self.ugras = False
         self.tank = tankik()
         self.tank.tank = self.settings_data["tank"]
         self.tank_szog = 0
@@ -660,6 +687,8 @@ class Alap:
         self.ranglista_irany_rect = None
         self.ranglista_frissites_rect = None
 
+
+
         self.halozat_volt_loves = False
 
         self.uj_buffok = {} # [mennyi van még hatra, buff név, negativ/pozitiv, ertek]
@@ -741,7 +770,7 @@ class Alap:
             self._mobil_gombok_frissitese()
 
         self.platformer_file_helye = os.path.join(os.path.dirname(__file__), "platformer_szobak")
-        self.jelenlegi_szoba = self.settings_data.get("platformer").get("jelenlegi_szoba", "1_kezdo_szoba.json")
+        self.jelenlegi_szoba = self.settings_data.get("platformer").get("szoba", None)
         self.elozo_jelenlegi_szoba = ""
         self.platformer_terkep = None
 
@@ -773,14 +802,16 @@ class Alap:
         self.halozati_mod = "single"
         self.statusz = "jatek"
         self.paused = False
-        self.elozo_jelenlegi_szoba = None
+        self.elozo_jelenlegi_szoba = ""
         self.home_hiba = ""
         self.halal_allapot = None
         self.mentes_megtortent_e = False
         if self.jatek_mode == "platformer":
             
             self._platformer_assets_brtoltes()
-            self.helyi_vilag.kep_meret_bealitas(self.helyi_jatekos_id, "width", "height", "", self.jatekos.kepek["Idle"][0].get_width() / self.platformer_zoom, self.jatekos.kepek["Idle"][0].get_height() / self.platformer_zoom)
+            
+            self.helyi_vilag.kep_meret_bealitas(self.helyi_jatekos_id, "width", "height", self.jatekos[self.helyi_jatekos_id].kepek["Idle"][0].get_width() / self.platformer_zoom, self.jatekos[self.helyi_jatekos_id].kepek["Idle"][0].get_height() / self.platformer_zoom)
+            self.helyi_vilag.kep_meret_bealitas(self.helyi_jatekos_id, "tamadas_szelesseg", "tamadas_magassag", self.p_slashok.get(1)[-2].get_width() / self.platformer_zoom, self.p_slashok.get(1)[-2].get_height() / self.platformer_zoom)
 
     def _multiplayer_inditas(self, mod: str):
         self._szin_frissites()
@@ -799,12 +830,16 @@ class Alap:
                 return
         else:
             self.szoba_kod = ""
-
-        self.halozat = HalozatiKliens(KOZPONTI_SZERVER_CIM, mod, self.szoba_kod, self.jatek_mode, self.nehezseg_szint, self.nev.strip() or "Jatekos",
-                                      self.szin, self.szeleseg, self.magassag, self.ip_cim, self.tank.tank)
+        if self.jatek_mode == "tankos":
+            kep = self.tank.tank
+        
+        elif self.jatek_mode == "platformer":
+            kep = self.golem
+        
+        self.halozat = HalozatiKliens(KOZPONTI_SZERVER_CIM, mod, self.szoba_kod, self.jatek_mode, self.nehezseg_szint, self.nev.strip() or "Jatekos", self.szin, self.szeleseg, self.magassag, self.ip_cim, kep)
         self.halozat.indit()
-        if self.jatek_mode == "platformer":
-            self._platformer_assets_brtoltes()
+        
+            
                          
         self.mentes_megtortent_e = False
 
@@ -813,6 +848,7 @@ class Alap:
         szoveg = self.font_nagy.render("THE ASSETS ARE LOADING\n please wait ......", True, (30, 255, 40))
         self.screen.blit(szoveg, (self.screen.get_width()//2-szoveg.get_width()//2, self.screen.get_height()//2-szoveg.get_height()//2))
         pygame.display.update()
+
     def kamera_mozgatasa(self, x, y):
         if self.eltolodott_kamera_x < x:
             self.kamera_vel.x = min(self.eltolodott_kamera_x + 5, 20)
@@ -1247,12 +1283,103 @@ class Alap:
 
     def _platformer_assets_brtoltes(self):
         self.platformer_kepek_ut = os.path.join(os.path.dirname(__file__), "tiles", "platformer")
-        self.platformer_babuk = {}
+        self.the_assets_are_loading()
+        self.p_elolenyek = {}
+        self.p_slashok = {}
+        self.p_c_slash = []
+        for golem in range(1, 4):
+            self.p_elolenyek[str(golem)] = {}
+            path_to_golems = os.path.join(os.path.dirname(__file__), "tiles", "platformer", "golem", "Golem_" + str(golem))
+            fielok = os.walk(path_to_golems)
+            fileok1 = []
+            for i in fielok:
+                        fileok1.append(i)
+
+            akciok = fileok1[0][1]
+            fileok1 = fileok1[1:]
+            szotar = {}
+            torlo = []
+            for index, i in enumerate(fileok1):
+                if i == []:
+                    torlo.append(index)
+
+            for i in torlo[:-1]:
+                del fileok1[i]
+
+            for i, j in enumerate(akciok):
+                szotar[j] = fileok1[i][2:]
+
+
+        
+            for nev, adat in szotar.items():
+                adatok = []
+                for i in adat[0]:
+                    j = self.p_kep_betolto(os.path.join(nev, i), path=path_to_golems)
+                    adatok.append(j)
+                adatok = self.p_kep_szerkesztes(adatok)
+
+                self.p_elolenyek[str(golem)][nev]=adatok
+            
         self.eltolodott_kamera_x = self.kamera_x
         self.eltolodott_kamera_y = self.kamera_y
-        self.the_assets_are_loading()
-        self.jatekos = P_eloleny("?", golem=self.golem)
+        self.jatekos = {}
+
+        path = os.path.join(os.path.dirname(__file__), "tiles", "platformer", "slash", "slash")
+        fielok = os.walk(path)
+        fileok1 = []
+        for i in fielok:
+            fileok1.append(i)
         
+
+        fielok = fileok1[0][2:]
+        adatok = []
+        for  adat in fielok[0]:
+            
+            
+            
+            j = self.p_kep_betolto(adat, szelesseg=500, path=path)
+            adatok.append(j)
+        adatok = self.p_kep_szerkesztes(adatok)
+
+            
+        self.p_slashok[1] = adatok
+
+
+
+
+        
+        if self.halozat:
+            self.jatekos[self.halozat.sajat_id] = P_eloleny(self.p_elolenyek[self.golem], golem=self.golem)
+            self.jatekos[self.halozat.sajat_id].azonosito = self.halozat.sajat_id
+        else:
+            self.jatekos[self.helyi_jatekos_id] = P_eloleny(self.p_elolenyek[self.golem], golem=self.golem)
+            self.jatekos[self.helyi_jatekos_id].azonosito = self.helyi_jatekos_id
+
+    def p_kep_betolto(self, nev, szelesseg=100, path=""):
+            kep = pygame.image.load(os.path.join(path, nev)).convert_alpha()
+            arany = szelesseg / kep.get_width()
+            uj_magassag = int(kep.get_height() * arany)
+
+            kep = pygame.transform.scale(kep, (szelesseg, uj_magassag))
+            return kep
+
+    def p_kep_szerkesztes(self, kepek):
+        combined_rect = None
+        for kep in kepek:
+            box = kep.get_bounding_rect()
+            if box.width == 0 or box.height == 0:
+                continue
+            if combined_rect == None:
+                combined_rect = box.copy()
+            else:
+                combined_rect.union_ip(box)
+        images = []
+        for i, img in enumerate(kepek):
+            surf = img.subsurface(combined_rect).copy()
+            images.append(surf)
+            pygame.image.save(surf, f"skash_0000{i}")
+        return images
+
 
     def _fo_menu_vissza(self):
         if self.halozat:
@@ -1451,7 +1578,6 @@ class Alap:
                 for golem_nev, adat in self.golem_valaszto_gombok.items():
                     if adat["rect"] and adat["rect"].collidepoint(event.pos):
                         self.golem = str(int(golem_nev)+1)
-                        print(self.golem)
                         break
                 for kulcs, adat in self.jatek_mode_valasztas.items():
                     if adat["rect"] and adat["rect"].collidepoint(event.pos):
@@ -1615,7 +1741,8 @@ class Alap:
                 gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("right").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("right") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("right"))],
                 gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("up").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("up") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("up"))],
                 gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("down").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("down") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("down"))],
-                gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("bumm").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("bumm") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("bumm"))],
+                gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("attack").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("attack") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("attack"))],
+                gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("jump").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("jump") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("jump"))]
             )
 
     def _halozati_input_frissites(self):
@@ -1678,15 +1805,17 @@ class Alap:
             jobb = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("right").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("right") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("right"))]
             fel = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("up").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("up") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("up"))]
             le = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("down").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("down") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("down"))]
-            loves = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("bumm").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("bumm") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("bumm"))]
-            
-            if bal != self.bal or jobb != self.jobb or fel != self.fel or le != self.le or loves != self.halozat_volt_loves:
-                self.halozat.kuldd({"tipus": "mozgas", "balra": bal, "jobbra": jobb, "fel": fel, "le": le, "loves": loves})
+            loves = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("attack").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("attack") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("attack"))]
+            ugras = gombok[getattr(pygame, "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("jump").upper() if self.billentyu_kiosztas.get(self.jatek_mode).get("jump") in lista else "K_" + self.billentyu_kiosztas.get(self.jatek_mode).get("jump"))]
+
+            if bal != self.bal or jobb != self.jobb or fel != self.fel or le != self.le or loves != self.halozat_volt_loves or ugras != self.ugras:
+                self.halozat.kuldd({"tipus": "mozgas", "balra": bal, "jobbra": jobb, "fel": fel, "le": le, "loves": loves, "ugras": ugras})
                 self.fel = fel
                 self.jobb = jobb
                 self.le = le
                 self.bal = bal
                 self.halozat_volt_loves = loves
+                self.ugras = ugras
 
     def _frissits_allapotot(self, delta_ido):
         if self.halozati_mod == "single":
@@ -1695,7 +1824,8 @@ class Alap:
                 self.helyi_vilag.frissites(delta_ido)
             self.utolso_allapot = self.helyi_vilag.nezet_jatekosnak(self.helyi_jatekos_id, self.szeleseg, self.magassag)
         else:
-            self._halozati_input_frissites()
+            if not self.setting:
+                self._halozati_input_frissites()
             if self.halozat:
                 uj = self.halozat.legfrissebb_allapot()
                 if uj is not None:
@@ -1857,7 +1987,9 @@ class Alap:
                         del self.uj_buffok[i]
                     self.uj_buffok_torlese = []
         elif rajzolt_allapot["jatek_mode"] == "platformer":
+            
 
+            
 
 
             
@@ -1866,22 +1998,26 @@ class Alap:
             rajz_kamera_x = self.kamera_x + self.screen.get_width() / 2 - self.screen.get_width() / (2 * zoom)
             rajz_kamera_y = self.kamera_y + self.screen.get_height() / 2 - self.screen.get_height() / (2 * zoom)
 
-            for reteg in self.platformer_terkep["rajz_retegek"]:
-                meret = reteg["tile_meret"]
+            reteg_sorrend = ["hatter", "platform", "veszely", "eloter"]
 
-                bal_cella = math.floor(rajz_kamera_x / meret) - 1
-                jobb_cella = math.floor((rajz_kamera_x + self.screen.get_width() / zoom) / meret) + 1
-                felso_cella = math.floor(rajz_kamera_y / meret) - 1
-                also_cella = math.floor((rajz_kamera_y + self.screen.get_height() / zoom) / meret) + 1
+            for szerep in reteg_sorrend:
+                retegek = self.platformer_terkep["rajz_retegek"].get(szerep, {})
 
-                for cella_y in range(felso_cella, also_cella + 1):
-                    for cella_x in range(bal_cella, jobb_cella + 1):
-                        for tile in reteg["rajz_racs"].get((cella_x, cella_y), ()):
-                            screen_x = int((tile["x"] - rajz_kamera_x) * zoom)
-                            screen_y = int((tile["y"] - rajz_kamera_y) * zoom)
-                            self.screen.blit(tile["kep"], (screen_x, screen_y))
-            
+                for reteg_nev, reteg in retegek.items():
+                    meret = reteg["csempe_meret"]
 
+                    bal_cella = math.floor(rajz_kamera_x / meret) - 1
+                    jobb_cella = math.floor((rajz_kamera_x + self.screen.get_width() / zoom) / meret) + 1
+                    felso_cella = math.floor(rajz_kamera_y / meret) - 1
+                    also_cella = math.floor((rajz_kamera_y + self.screen.get_height() / zoom) / meret) + 1
+
+                    for cella_y in range(felso_cella, also_cella + 1):
+                        for cella_x in range(bal_cella, jobb_cella + 1):
+                            for csempe in reteg["rajz_racs"].get((cella_x, cella_y), ()):
+                                screen_x = int((csempe["x"] - rajz_kamera_x) * zoom)
+                                screen_y = int((csempe["y"] - rajz_kamera_y) * zoom)
+
+                                self.screen.blit(csempe["kep"], (screen_x, screen_y))
 
 
             if rajzolt_allapot["szoba"] != self.jelenlegi_szoba:
@@ -1889,7 +2025,7 @@ class Alap:
 
             for jatekos_id, jatekos in rajzolt_allapot.get("jatekosok", {}).items():
                 self.kamera_mozgatasa(jatekos.get("x"), jatekos.get("y"))
-                rect = pygame.Rect(jatekos.get("x") - self.kamera_x, jatekos.get("y") - self.kamera_y, self.jatekos.kepek["Idle"][0].get_width(), self.jatekos.kepek["Idle"][0].get_height())
+                #rect = pygame.Rect(jatekos.get("x") - self.kamera_x, jatekos.get("y") - self.kamera_y, self.jatekos[].kepek["Idle"][0].get_width(), self.jatekos.kepek["Idle"][0].get_height())
                 akciok = jatekos.get("akcio")
                 irany = jatekos.get("irany")
                 if "Idle" == akciok or irany == 0:
@@ -1908,19 +2044,75 @@ class Alap:
 
                 jatekos_screen_x = (jatekos.get("x") - rajz_kamera_x) * zoom
                 jatekos_screen_y = (jatekos.get("y") - rajz_kamera_y) * zoom
-                self.jatekos.rajzolas(self.screen, jatekos_screen_x, jatekos_screen_y, 0, 0, melyik=akcio, forgatas=irany)
+                
+                azonosito = jatekos.get("azonosito")
+                if azonosito not in self.jatekos:
+                    if self.halozat:
+                        self.jatekos[azonosito] = P_eloleny(self.p_elolenyek[jatekos.get("kep")], golem=self.golem)
+                        self.jatekos[azonosito].azonosito = azonosito
+                    else:
+                        self.jatekos[azonosito] = P_eloleny(self.p_elolenyek[jatekos.get("kep")], golem=self.golem)
+                        self.jatekos[azonosito].azonosito = azonosito
+                
+
+
+                self.jatekos[azonosito].rajzolas(self.screen, jatekos_screen_x, jatekos_screen_y, 0, 0, melyik=akcio, forgatas=irany)
                 # self.jatekos.rajzolas(self.screen, jatekos.get("x"), jatekos.get("y"), self.kamera_x, self.kamera_y, melyik=akcio, forgatas=irany)
                 #pygame.draw.rect(self.screen, (255, 0, 0), rect)
-            pass
+            torolni = []
+            for j, i in rajzolt_allapot.get("jatekosok", {}).items():
+                if i.get("azonosito") not in self.jatekos:
+                    torolni.append(i.get("azonosito"))
+            j = self.jatekos.get(jatekos.get("azonosito"))
+            if jatekos.get("attack", False):
+                
+                h =j.irany
+                if jatekos.get("fel") and jatekos.get("le"):
+                    irany_y = 0
+                elif jatekos.get("fel"):
+                    irany_y = 1
+                elif jatekos.get("le"):
+                    irany_y = -1
+                else:
+                    irany_y = 0
+                self.p_c_slash.append(Slahs(self.p_slashok.get(1), h, irany_y, j.kepek[j.elozo_mozgas_szamlalo][0].get_rect()))
+                # self.p_c_slash.append(Slahs(self.p_slashok.get(1), h if h==1 else h-j.kepek[j.elozo_mozgas_szamlalo][j.mozgas_szamlalo].get_width(), irany_y))
+            if jatekos.get("hp") != j.hp:
+                j.hp = jatekos.get("hp")
+            if jatekos.get("olesek") != j.olesek:
+                j.olesek = jatekos.get("olesek")
+            if jatekos.get("talalatok") != j.talalatok:
+                j.talalatok = jatekos.get("talalatok")
+            self.ido = jatekos.get("eltelt_ido", 0)
+                
+            for i in self.p_c_slash:
+                x = (jatekos.get("x") - rajz_kamera_x) * zoom
+                y = (jatekos.get("y") - rajz_kamera_y) * zoom
+                
+                j = i.draw(self.screen, x, y, 0,0 )#self.kamera_x, self.kamera_y)
 
-        if not self.halozat and rajzolt_allapot["jatek_mode"] != "tankos":
+            self._tankos_felso_hud_rajzolas(jatekos, len(rajzolt_allapot.get("jatekosok", {})))
+
+
+
+            for j in torolni:
+                del self.jatekos[j]
+            if self.halozat:
+                szoveg = self.font_kis.render(self.halozat.szoba_kod, True, (255, 255, 255))
+                self.screen.blit(szoveg, (300, 10))
+            
+
+        if rajzolt_allapot["jatek_mode"] != "tankos":
             pygame.draw.rect(self.screen, (100, 255, 100), self.pause_gomb)
-            pause_txt = self.font_kis.render("PAUSE", True, (0, 0, 0))
+            pause_txt = self.font_kis.render("PAUSE" if not self.halozat else "Settings", True, (0, 0, 0))
             self.screen.blit(pause_txt, (self.pause_gomb.centerx - pause_txt.get_width() // 2, self.pause_gomb.centery - pause_txt.get_height() // 2,))
 
         if self.paused and self.halozati_mod == "single":
             self._pause_rajzolas()
-
+        
+        if self.setting and self.halozat:
+            self.settings_rajzolas(False)
+            self.settings_event()
 
         if self.is_mobile:
             pygame.draw.circle(self.screen, (80, 80, 80), self.joystick_kozep, self.joystick_sugar, 4)
@@ -1937,8 +2129,13 @@ class Alap:
             loves_szoveg = self.font_kis.render("TŰZ", True, (255, 255, 255))
             self.screen.blit(loves_szoveg, (self.gomb_kozep[0] - loves_szoveg.get_width() // 2, self.gomb_kozep[1] - loves_szoveg.get_height() // 2))
 
-    def settings_rajzolas(self):
-        self.screen.fill((8, 11, 16))
+    def settings_rajzolas(self, dark=True):
+        if dark:
+            self.screen.fill((8, 11, 16))
+        else:
+            felulet = pygame.Surface((self.szeleseg, self.magassag), pygame.SRCALPHA)
+            felulet.fill((0, 0, 0, 160))
+            self.screen.blit(felulet, (0, 0))
 
         ful_magassag = 46
         ful_tavolsag = 12
@@ -1951,6 +2148,7 @@ class Alap:
         szoveg_szin = (175, 185, 195)
         felirat = self.font_kozep.render("vissza", True, szoveg_szin)
         self.settings_vissza = pygame.Rect(self.szeleseg-100, 30, felirat.get_width() + 10, felirat.get_height() + 5)
+        
 
         pygame.draw.rect(self.screen, hatter, self.settings_vissza, border_radius=10)
 
@@ -2338,7 +2536,10 @@ class Alap:
                     continue
 
                 if self.settings_vissza and self.settings_vissza.collidepoint(event.pos):
-                    self.statusz = self.elozo_statusz
+                    if self.halozat and self.statusz == "jatek":
+                        self.setting = not self.setting
+                    else:
+                        self.statusz = self.elozo_statusz
 
                 
 
@@ -2390,12 +2591,13 @@ class Alap:
         else:
             with open(self.path_settings_billentyu, "w", encoding="utf-8") as f:
                 menteni_kivant = {
-                    i: {"up": ra if mood==i and valtosztando=="up" else self.billentyu_kiosztas.get(i, "platformer").get("up", "space"),
+                    i: {"up": ra if mood==i and valtosztando=="up" else self.billentyu_kiosztas.get(i, "platformer").get("up", "w"),
                         "down": ra if mood==i and valtosztando=="down" else self.billentyu_kiosztas.get(i, "platformer").get("down", "s"),
                         "left": ra if mood==i and valtosztando=="left" else self.billentyu_kiosztas.get(i, "platformer").get("left", "a"),
                         "right": ra if mood==i and valtosztando=="right" else self.billentyu_kiosztas.get(i, "platformer").get("right", "d"),
-                        "bumm": ra if mood==i and valtosztando=="bumm" else self.billentyu_kiosztas.get(i, "platformer").get("bumm", "j"),
-                        "pause": ra if mood==i and valtosztando=="pause" else self.billentyu_kiosztas.get(i, "platformer").get("pause", "kescape")
+                        "attack": ra if mood==i and valtosztando=="attack" else self.billentyu_kiosztas.get(i, "platformer").get("attack", "j"),
+                        "jump": ra if mood==i and valtosztando=="jump" else self.billentyu_kiosztas.get(i, "platformer").get("jump", "space"),
+                        "pause": ra if mood==i and valtosztando=="pause" else self.billentyu_kiosztas.get(i, "platformer").get("pause", "escape")
                         } for i in self.settings_billentyu_modok.keys()
                     }
                 json.dump(menteni_kivant, f, indent=2, ensure_ascii=False)
@@ -2577,11 +2779,14 @@ class Alap:
                 self._atmeretezes(event.w, event.h)
             if self.halozati_mod == "single":
                 if event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_p):
-                        self.paused = not self.paused if self.halozati_mod == "single" else self.paused
+                        self.paused = not self.paused 
             if not self.paused:
                 if event.type == pygame.MOUSEBUTTONDOWN and self.pause_gomb.collidepoint(event.pos):
                     if self.halozati_mod == "single":
                         self.paused = not self.paused
+                    else:
+                        self.setting = not self.setting
+
             if self.paused and self.halozati_mod == "single":
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     for kulcs, adat in self.pause_gombok.items():
@@ -2651,11 +2856,11 @@ class Alap:
                     if g_tav <= self.gomb_sugar:
                         self.mobil_loves = True
             
-    def _pause_rajzolas(self):
+    def _pause_rajzolas(self, text="PAUSED"):
         felulet = pygame.Surface((self.szeleseg, self.magassag), pygame.SRCALPHA)
         felulet.fill((0, 0, 0, 160))
         self.screen.blit(felulet, (0, 0))
-        pause_txt = self.font_nagy.render("PAUSED", True, (255, 255, 255))
+        pause_txt = self.font_nagy.render(text, True, (255, 255, 255))
         self.screen.blit(pause_txt, (self.szeleseg // 2 - pause_txt.get_width() // 2, self.magassag // 2 - 120))
         for index, kulcs in enumerate(self.pause_gombok):
             szin = (100, 255, 100) if kulcs == "resume" else (255, 255, 0) if kulcs == "main menu" else (255, 0, 0)
@@ -2810,12 +3015,11 @@ class Alap:
         also_szoveg = self.font_mini.render(f"Találatok: {sajat.get('pontok', 0)}     Ölések: {sajat.get('olesek', 0)}", True, (220, 220, 225))
 
         self.screen.blit(also_szoveg, (24, 99))
+        felso_szoveg = f"Idő: {self.ido:.0f}    "
 
-        felso_szoveg = (
-            f"Idő: {self.ido:.0f}    "
-            f"Tankok: {tank_db}    "
-            f"Koordináta: {self.koordinata_szoveg}"
-        )
+        if self.jatek_mode == "tankos":
+            felso_szoveg += f"Tankok: {tank_db}    Koordináta: {self.koordinata_szoveg}"
+        
 
         felirat = self.font_kis.render(felso_szoveg, True, (245, 245, 245))
 
@@ -2925,52 +3129,115 @@ class Alap:
 
 
         
-    """def platformer_terkep_betolto(self, szoba):
-        if szoba == "":
-            szoba = "1_kezdo_szoba.json"
-        hely = os.path.join(self.platformer_file_helye, str(szoba))
-        with open(hely, "r", encoding="utf8") as f:
-            world = json.loads(f.read().strip())
-        self.platformer_terkep = world"""
-
     def platformer_terkep_betolto(self, szoba):
         fajl = os.path.join(os.path.dirname(__file__), "p1.ldtk")
+
         self.platformer_terkep = ldtk_terkep_betoltes(fajl, szoba if szoba else None)
         self.jelenlegi_szoba = self.platformer_terkep["szoba"]
 
-        self.platformer_tileset = pygame.image.load(os.path.join(os.path.dirname(__file__), "SunnyLand_by_Ansimuz-extended.png")).convert_alpha()
+        self.platformer_tilesetek = {}
         self.platformer_tile_cache = {}
 
         zoom = self.platformer_zoom
 
-        for reteg in self.platformer_terkep["rajz_retegek"]:
-            meret = reteg["tile_meret"]
-            reteg["rajz_racs"] = {}
+        reteg_sorrend = [
+            "hatter",
+            "platform",
+            "veszely",
+            "eloter",
+        ]
 
-            for tile in reteg["tileok"]:
-                alpha = max(0, min(255, int(tile["alpha"] * reteg["opacity"] * 255)))
-                kulcs = (tile["src_x"], tile["src_y"], meret, tile["flip"], alpha, zoom)
-                kep = self.platformer_tile_cache.get(kulcs)
+        for szerep in reteg_sorrend:
+            retegek = self.platformer_terkep["rajz_retegek"].get(szerep, {})
 
-                if kep is None:
-                    kep = self.platformer_tileset.subsurface(pygame.Rect(tile["src_x"], tile["src_y"], meret, meret)).copy()
+            for reteg_nev, reteg in retegek.items():
+                kep_fajl = reteg["kep_fajl"]
+                meret = reteg["csempe_meret"]
 
-                    if tile["flip"]:
-                        kep = pygame.transform.flip(kep, bool(tile["flip"] & 1), bool(tile["flip"] & 2))
+                reteg["rajz_racs"] = {}
 
-                    if alpha < 255:
-                        kep.set_alpha(alpha)
+                if not kep_fajl:
+                    continue
 
-                    if zoom != 1:
-                        kep = pygame.transform.scale(kep, (int(meret * zoom), int(meret * zoom)))
+                if kep_fajl not in self.platformer_tilesetek:
+                    kep_ut = os.path.join(os.path.dirname(__file__), kep_fajl)
 
-                    self.platformer_tile_cache[kulcs] = kep
+                    if not os.path.exists(kep_ut):
+                        kep_ut = os.path.join(
+                            os.path.dirname(__file__),
+                            "tiles",
+                            "platformer",
+                            kep_fajl
+                        )
 
-                tile["kep"] = kep
+                    self.platformer_tilesetek[kep_fajl] = pygame.image.load(kep_ut).convert_alpha()
 
-                cella_x = int(tile["x"] // meret)
-                cella_y = int(tile["y"] // meret)
-                reteg["rajz_racs"].setdefault((cella_x, cella_y), []).append(tile)
+                tileset = self.platformer_tilesetek[kep_fajl]
+
+                for csempe in reteg["csempek"].values():
+                    forras_x = csempe["forras_x"]
+                    forras_y = csempe["forras_y"]
+
+                    tukrozes = csempe["tukrozes"]
+
+                    alpha = max(
+                        0,
+                        min(
+                            255,
+                            int(csempe["atlatszosag"] * reteg["atlatszosag"] * 255)
+                        )
+                    )
+
+                    kulcs = (
+                        kep_fajl,
+                        forras_x,
+                        forras_y,
+                        meret,
+                        tukrozes,
+                        alpha,
+                        zoom,
+                    )
+
+                    kep = self.platformer_tile_cache.get(kulcs)
+
+                    if kep is None:
+                        kivagas = pygame.Rect(forras_x, forras_y, meret, meret)
+
+                        kep = tileset.subsurface(kivagas).copy()
+
+                        if tukrozes:
+                            vizszintes = bool(tukrozes & 1)
+                            fuggoleges = bool(tukrozes & 2)
+
+                            kep = pygame.transform.flip(
+                                kep,
+                                vizszintes,
+                                fuggoleges
+                            )
+
+                        if alpha < 255:
+                            kep.set_alpha(alpha)
+
+                        if zoom != 1:
+                            kep = pygame.transform.scale(
+                                kep,
+                                (
+                                    int(meret * zoom),
+                                    int(meret * zoom)
+                                )
+                            )
+
+                        self.platformer_tile_cache[kulcs] = kep
+
+                    csempe["kep"] = kep
+
+                    cella_x = int(csempe["x"] // meret)
+                    cella_y = int(csempe["y"] // meret)
+
+                    reteg["rajz_racs"].setdefault(
+                        (cella_x, cella_y),
+                        []
+                    ).append(csempe)
 
     def run(self):
         while self.running:
@@ -2987,7 +3254,7 @@ class Alap:
                 self._varakozas_event()
             elif self.statusz == "jatek":
                 if self.jatek_mode == "platformer":
-                    if self.elozo_jelenlegi_szoba != self.jelenlegi_szoba:
+                    if self.platformer_terkep is None or self.elozo_jelenlegi_szoba != self.jelenlegi_szoba:
                         self.platformer_terkep_betolto(self.jelenlegi_szoba)
                         self.elozo_jelenlegi_szoba = self.jelenlegi_szoba
                 self._frissits_allapotot(delta_ido)
@@ -3010,9 +3277,12 @@ class Alap:
                 self._jatek_rajzolas(delta_ido)
                 self._halott_rajzolas()
                 self._halott_event()
-            if self.halozat and self.halozat.init_megkapva and not self.platformer_halozat_meretezes:
-                self.halozat.kuldd({"tipus": "kep_beallitas", "azonosito":self.halozat.sajat_id, "width":"width", "height": "height", "kep": "", "x": self.jatekos.kepek["Idle"][0].get_width() / self.platformer_zoom, "y": self.jatekos.kepek["Idle"][0].get_height() / self.platformer_zoom})
-                self.platformer_halozat_meretezes = True             
+            if self.halozat and self.halozat.init_megkapva and not self.platformer_halozat_meretezes and self.jatek_mode == "platformer":
+                self._platformer_assets_brtoltes()
+                self.halozat.kuldd({"tipus": "kep_beallitas", "azonosito":self.halozat.sajat_id, "width":"width", "height": "height", "kep": "", "x": self.jatekos[self.halozat.sajat_id].kepek["Idle"][0].get_width() / self.platformer_zoom, "y": self.jatekos[self.halozat.sajat_id].kepek["Idle"][0].get_height() / self.platformer_zoom})
+                self.halozat.kuldd({"tipus": "kep_beallitas", "azonosito":self.halozat.sajat_id, "width":"tamadas_szelesseg", "height": "tamadas_magassag", "kep": "", "x": self.p_slashok[1][0].get_width() / self.platformer_zoom, "y": self.p_slashok[1][0].get_height() / self.platformer_zoom})
+                self.platformer_halozat_meretezes = True
+                          
             pygame.display.update()
         if self.halozat:
             self.halozat.leallit()
