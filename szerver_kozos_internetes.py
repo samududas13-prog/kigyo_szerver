@@ -233,7 +233,7 @@ class KozpontiSzerver:
                         bool(adat.get("ugras", False))
                     )
                 elif tipus == "kep_beallitas":
-                    szoba.vilag.kep_meret_bealitas(adat.get("azonosito"), adat.get("width"), adat.get("height"), adat.get("kep"), adat.get("x"), adat.get("y"))
+                    szoba.vilag.kep_meret_bealitas(adat.get("azonosito"), adat.get("width"), adat.get("height"), adat.get("x"), adat.get("y"))
                 elif tipus == "atmeretezes":
                     kapcsolat.szelesseg = int(adat.get("szelesseg", kapcsolat.szelesseg))
                     kapcsolat.magassag = int(adat.get("magassag", kapcsolat.magassag))
