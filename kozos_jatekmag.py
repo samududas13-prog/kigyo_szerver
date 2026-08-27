@@ -6,6 +6,7 @@ import json
 from collections import defaultdict, deque
 from typing import Dict, List, Tuple, Optional
 from nevek_10000 import NEVEK
+from p_terkem_beolvasasa import ldtk_terkep_betoltes
 
 class Beallitasok:
     def __init__(self):
@@ -187,127 +188,6 @@ class KorSeged:
         """x,y: bal-felso sarok; sz: szelesseg; m: magassag"""
         return x1 < x2 + sz2 and x1 + sz1 > x2 and y1 < y2 + m2 and y1 + m1 > y2
 
-def ldtk_terkep_betoltes(fajl, szoba_nev=None, zoom=4):
-    with open(fajl, "r", encoding="utf-8") as f:
-        adat = json.load(f)
-
-    levelek = []
-
-    for world in adat.get("worlds", []):
-        levelek.extend(world.get("levels", []))
-
-    if not levelek:
-        levelek = adat.get("levels", [])
-
-    if szoba_nev:
-        level = next((l for l in levelek if l["identifier"] == szoba_nev), levelek[0])
-    else:
-        level = levelek[0]
-
-    platformok = []
-    rajz_retegek = []
-    platform_racs = {}
-    platform_racs_meret = 16
-
-    for layer in level["layerInstances"]:
-
-        # fizikai platformok
-        if layer["__identifier"] == "Collisions":
-            grid = layer["__gridSize"]
-            width = layer["__cWid"]
-            platform_racs_meret = grid
-
-            for index, value in enumerate(layer["intGridCsv"]):
-
-                if value not in (1, 3):
-                    continue
-
-                x = (index % width) * grid
-                y = (index // width) * grid
-
-                block = {"x": x, "y": y, "width": grid, "height": grid, "texture": [60, 60, 60]}
-                platformok.append(block)
-                platform_racs[(index % width, index // width)] = block
-
-    for layer in reversed(level["layerInstances"]):
-
-        if layer["__identifier"] not in (
-            "Bg_textures",
-            "Collisions",
-            "Wall_shadows"
-        ):
-            continue
-
-        tiles = []
-
-        for tile in layer.get("autoLayerTiles", []):
-            tiles.append({
-                "x": tile["px"][0],
-                "y": tile["px"][1],
-                "src_x": tile["src"][0],
-                "src_y": tile["src"][1],
-                "flip": tile["f"],
-                "alpha": tile["a"]
-            })
-
-        rajz_retegek.append({
-            "nev": layer["__identifier"],
-            "tileset": os.path.basename(
-                layer.get("__tilesetRelPath") or ""
-            ),
-            "tile_meret": layer["__gridSize"],
-            "tiles": tiles
-        })
-
-    rajz_retegek = []
-
-    for layer in reversed(level["layerInstances"]):
-        tileset_path = layer.get("__tilesetRelPath")
-
-        if not tileset_path:
-            continue
-
-        tileok = []
-
-        for tile in layer.get("autoLayerTiles", []) + layer.get("gridTiles", []):
-            tileok.append({
-                "x": tile["px"][0] + layer.get("__pxTotalOffsetX", 0),
-                "y": tile["px"][1] + layer.get("__pxTotalOffsetY", 0),
-
-                # honnan vágja ki a tilesetből
-                "src_x": tile["src"][0],
-                "src_y": tile["src"][1],
-
-                "tile_id": tile["t"],
-                "flip": tile["f"],
-                "alpha": tile["a"]
-            })
-
-        rajz_retegek.append({
-            "nev": layer["__identifier"],
-            "texture": os.path.basename(tileset_path),
-            "tile_meret": layer["__gridSize"],
-            "opacity": layer.get("__opacity", 1.0),
-            "tileok": tileok
-        })
-
-    
-
-    return {
-        "szoba": level["identifier"],
-        "width": level["pxWid"],
-        "height": level["pxHei"],
-        "hatter_szin": level["__bgColor"],
-
-        "platformok": platformok,
-        "platform_racs": platform_racs,
-        "platform_racs_meret": platform_racs_meret,
-        "rajz_retegek": rajz_retegek,
-
-        # a jelenlegi kódod ezt is várja:
-        "ground": [],
-        "portok": [],
-    }
 
 class SzinSeged:
     @staticmethod
@@ -642,10 +522,11 @@ class P_elolenyek:
             "hp": self.hp,
             "el": self.el,
             "eltelt_ido": self.eltelt_ido,
+
+            "eltelt_ido": self.eltelt_ido,
             "olesek": self.olesek,
             "pontok": self.talalatok,
-            "max_hp": self.alap_hp,
-            "tuzelt": self.tuzelt,
+            "max_hp": self.alap_hp, 
             "uj_buffok": self.uj_buffok,
             "akcio": self.akcio,
             "irany": self.irany,
@@ -1390,11 +1271,11 @@ class VilagAllapot:
             self.jatekosok[azonosito] = uj
             self.tank_jatekos_racs_hozzaad(uj)
         elif self.jatek_mode == "platformer":
-            x, y = 1200, 1200
-            print(kep)
-            uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok, kep)
-            uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
-            self.jatekosok[azonosito] = uj
+            x, y = self.platformer_spawn_kereses(40, 50)
+            for i in range(2):
+                uj = P_elolenyek(azonosito, nev, x, y, sugar, k_szeleseg, k_magassag, self.beallitasok, kep)
+                uj.kamera = Kamera(400, 400) #uj.x, uj.y, k_szeleseg, k_magassag)
+                self.jatekosok[azonosito] = uj
 
     def jatekos_torlese(self, azonosito: str) :
         jatekos = self.jatekosok.get(azonosito)
@@ -1477,6 +1358,7 @@ class VilagAllapot:
         # jatekos.kamera.kepernyo_szelesseg = szelesseg
         if self.jatek_mode == "platformer":
             jatekos.kamera.kepernyo_magassag = magassag
+            jatekos.kamera.kepernyo_szelesseg = szelesseg
 
         allapot = {
             "tipus": "nagy",
@@ -1651,12 +1533,221 @@ class VilagAllapot:
         except:
             pass
 
-    def kep_meret_bealitas(self, azonosito, nev, nev2, kep, x, y):
+    def kep_meret_bealitas(self, azonosito, nev, nev2, x, y):
         eloleny = self.jatekosok.get(azonosito)
         setattr(eloleny, nev, x)
         setattr(eloleny, nev2, y)
-    # --------------- CSAK KÍGYÓS MÓD ------------------
 
+    def platformer_spawn_kereses(self, jatekos_szelesseg=40, jatekos_magassag=50):
+        if self.platformer_terkep is None:
+            return 100, 100
+
+        platform_racs = self.platformer_terkep["platform_racs"]
+        racs_meret = self.platformer_terkep["platform_racs_meret"]
+
+        racs_szelesseg = math.ceil(self.platformer_terkep["width"] / racs_meret)
+        racs_magassag = math.ceil(self.platformer_terkep["height"] / racs_meret)
+
+        def szilard(cella_x, cella_y):
+            platform = platform_racs.get((cella_x, cella_y))
+
+            if platform is None:
+                return False
+
+            return platform.get("reteg") == "Collisions"
+
+        # ---------------------------------------------------------
+        # 1. Megkeressük a külvilágot.
+        #
+        # Minden olyan üres cella, amely a térkép széléről elérhető,
+        # a játszható barlangon KÍVÜL van.
+        # ---------------------------------------------------------
+
+        kulso_terulet = set()
+        sor = deque()
+
+        for cella_x in range(racs_szelesseg):
+            if not szilard(cella_x, 0):
+                kulso_terulet.add((cella_x, 0))
+                sor.append((cella_x, 0))
+
+            if not szilard(cella_x, racs_magassag - 1):
+                kulso_terulet.add((cella_x, racs_magassag - 1))
+                sor.append((cella_x, racs_magassag - 1))
+
+        for cella_y in range(racs_magassag):
+            if not szilard(0, cella_y):
+                kulso_terulet.add((0, cella_y))
+                sor.append((0, cella_y))
+
+            if not szilard(racs_szelesseg - 1, cella_y):
+                kulso_terulet.add((racs_szelesseg - 1, cella_y))
+                sor.append((racs_szelesseg - 1, cella_y))
+
+        iranyok = [
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1),
+        ]
+
+        while sor:
+            cella_x, cella_y = sor.popleft()
+
+            for dx, dy in iranyok:
+                uj_x = cella_x + dx
+                uj_y = cella_y + dy
+
+                if uj_x < 0 or uj_x >= racs_szelesseg:
+                    continue
+
+                if uj_y < 0 or uj_y >= racs_magassag:
+                    continue
+
+                if (uj_x, uj_y) in kulso_terulet:
+                    continue
+
+                if szilard(uj_x, uj_y):
+                    continue
+
+                kulso_terulet.add((uj_x, uj_y))
+                sor.append((uj_x, uj_y))
+
+        # ---------------------------------------------------------
+        # 2. Megkeressük a legnagyobb zárt belső területet.
+        # ---------------------------------------------------------
+
+        mar_megneztuk = set()
+        legnagyobb_belso_terulet = set()
+
+        for cella_y in range(racs_magassag):
+            for cella_x in range(racs_szelesseg):
+
+                if szilard(cella_x, cella_y):
+                    continue
+
+                if (cella_x, cella_y) in kulso_terulet:
+                    continue
+
+                if (cella_x, cella_y) in mar_megneztuk:
+                    continue
+
+                jelenlegi_terulet = set()
+                sor = deque()
+
+                sor.append((cella_x, cella_y))
+                mar_megneztuk.add((cella_x, cella_y))
+
+                while sor:
+                    x, y = sor.popleft()
+                    jelenlegi_terulet.add((x, y))
+
+                    for dx, dy in iranyok:
+                        uj_x = x + dx
+                        uj_y = y + dy
+
+                        if uj_x < 0 or uj_x >= racs_szelesseg:
+                            continue
+
+                        if uj_y < 0 or uj_y >= racs_magassag:
+                            continue
+
+                        if szilard(uj_x, uj_y):
+                            continue
+
+                        if (uj_x, uj_y) in kulso_terulet:
+                            continue
+
+                        if (uj_x, uj_y) in mar_megneztuk:
+                            continue
+
+                        mar_megneztuk.add((uj_x, uj_y))
+                        sor.append((uj_x, uj_y))
+
+                if len(jelenlegi_terulet) > len(legnagyobb_belso_terulet):
+                    legnagyobb_belso_terulet = jelenlegi_terulet
+
+        if not legnagyobb_belso_terulet:
+            print("Nincs zárt belső járható terület!")
+            return 100, 100
+
+        # ---------------------------------------------------------
+        # 3. A karakter mérete cellákban.
+        # ---------------------------------------------------------
+
+        jatekos_cella_szelesseg = max(1, math.ceil(jatekos_szelesseg / racs_meret))
+        jatekos_cella_magassag = max(1, math.ceil(jatekos_magassag / racs_meret))
+
+        lehetseges_helyek = []
+
+        # ---------------------------------------------------------
+        # 4. Csak a BELÜL található rendes padlókat keressük.
+        # ---------------------------------------------------------
+
+        for talaj_y in range(jatekos_cella_magassag, racs_magassag):
+
+            for kezdo_x in range(1, racs_szelesseg - jatekos_cella_szelesseg - 1):
+
+                # A játékos alatt legyen összefüggő Collision talaj.
+                rendes_talaj = True
+
+                for x in range(kezdo_x - 1, kezdo_x + jatekos_cella_szelesseg + 1):
+                    if not szilard(x, talaj_y):
+                        rendes_talaj = False
+                        break
+
+                if not rendes_talaj:
+                    continue
+
+                felso_y = talaj_y - jatekos_cella_magassag
+
+                # A játékos teljes helye a valódi belső járható
+                # terület része legyen.
+                hely_szabad = True
+
+                for y in range(felso_y, talaj_y):
+                    for x in range(kezdo_x, kezdo_x + jatekos_cella_szelesseg):
+
+                        if (x, y) not in legnagyobb_belso_terulet:
+                            hely_szabad = False
+                            break
+
+                    if not hely_szabad:
+                        break
+
+                if not hely_szabad:
+                    continue
+
+                x = (kezdo_x * racs_meret + (jatekos_cella_szelesseg * racs_meret - jatekos_szelesseg) / 2)
+                y = (talaj_y * racs_meret - jatekos_magassag)
+
+                lehetseges_helyek.append((x, y))
+
+        if not lehetseges_helyek:
+            print("A belső területen nem találtam megfelelő spawn helyet!")
+            return 100, 100
+
+        # ---------------------------------------------------------
+        # 5. A belső játszható terület közepéhez közeli helyet választ.
+        # ---------------------------------------------------------
+
+        belso_kozep_x = sum(cella[0] for cella in legnagyobb_belso_terulet) / len(legnagyobb_belso_terulet)
+        belso_kozep_y = sum(cella[1] for cella in legnagyobb_belso_terulet) / len(legnagyobb_belso_terulet)
+
+        legjobb_hely = min(
+            lehetseges_helyek,
+            key=lambda hely: (hely[0] / racs_meret - belso_kozep_x) ** 2 + (hely[1] / racs_meret - belso_kozep_y) ** 2
+        )
+
+        print("Platformer spawn:", legjobb_hely)
+
+        return legjobb_hely
+        # --------------- CSAK KÍGYÓS MÓD ------------------
+
+
+
+
+    # -------------kigyo -----------------------
     def kigyo_celszam(self, nehezseg_szint):
         if nehezseg_szint == "Easy":
             return 120
@@ -3221,27 +3312,33 @@ class VilagAllapot:
     def _platformer_frissites(self, delta_ido):
         for jatekos in self.jatekosok.values():
             self.jatekos_mozgas(jatekos, delta_ido)
+            jatekos.eltelt_ido += delta_ido
             
 
-    def platformer_kezdes(self, jelenlegi_szoba):
+    def platformer_kezdes(self, jelenlegi_szoba=None):
         self.platformer_file_helye = os.path.join(os.path.dirname(__file__), "platformer_szobak")
+
         self.jelenlegi_szoba = jelenlegi_szoba
         self.platformer_terkep = None
-        self.platformer_spone_point = []
-        self.platformer_szoba_valtas = False
-        
 
+        self.platformer_spone_point = {}
+        self.platformer_szoba_valtas = False
 
         self.platformer_terkep_betolto(self.jelenlegi_szoba)
 
-   
+
     def platformer_terkep_betolto(self, szoba=None):
         fajl = os.path.join(os.path.dirname(__file__), "p1.ldtk")
 
-        self.platformer_terkep = ldtk_terkep_betoltes(fajl, szoba if szoba else None)
+        self.platformer_terkep = ldtk_terkep_betoltes(
+            fajl,
+            szoba if szoba else None
+        )
 
         self.jelenlegi_szoba = self.platformer_terkep["szoba"]
-            
+
+        self.beallitasok.vilag_szelesseg = self.platformer_terkep["width"]
+        self.beallitasok.vilag_magassag = self.platformer_terkep["height"]
 
     def jatekos_mozgas(self, jatekos: P_elolenyek, delta_ido):
         bottom_y = jatekos.y 
@@ -3250,6 +3347,9 @@ class VilagAllapot:
         midle_2_y = jatekos.y - jatekos.height // 5 * 4
         bottom_left_x = jatekos.x
         bottom_right_x = jatekos.x + jatekos.width
+        racs_meret = self.platformer_terkep["platform_racs_meret"]
+        platform_racs = self.platformer_terkep["platform_racs"]
+        
 
         jatekos.acc.x = 0
         ugras, eses, balra, jobbra = False, False, False, False
@@ -3309,6 +3409,9 @@ class VilagAllapot:
         if -6 <= jatekos.vel.y <= 1:
             self.gravitacio  = max(self.gravitacio - 0.1, 0.5)
         else: self.gravitacio = min(self.gravitacio+0.1, self.alap_gravitacio)
+
+
+        
 
 
 
@@ -3398,10 +3501,7 @@ class VilagAllapot:
                 if not masik.el:
                     continue
  
-                if KorSeged.dobozok_utkozne_e(
-                    hitbox_x, hitbox_y, jatekos.tamadas_szelesseg, jatekos.tamadas_magassag,
-                    masik.x, masik.y - masik.height, masik.width, masik.height,
-                ):
+                if KorSeged.dobozok_utkozne_e(hitbox_x, hitbox_y, jatekos.tamadas_szelesseg, jatekos.tamadas_magassag, masik.x, masik.y - masik.height, masik.width, masik.height,):
                     Buffok.hp(masik, -jatekos.tamadas_sebzes)
                     jatekos.talalatok += 1
                     if masik.hp <= 0:
