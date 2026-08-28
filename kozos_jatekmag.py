@@ -600,8 +600,8 @@ class Kamera:
         self.kepernyo_magassag = kepernyo_magassag
 
         
-        self.holtter_szelesseg = 150  
-        self.holtter_magassag = 200   
+        self.holtter_szelesseg = 50  
+        self.holtter_magassag = 50 
         
        
         self.fokusz_x = 0
