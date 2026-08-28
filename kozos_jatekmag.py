@@ -469,6 +469,8 @@ class P_elolenyek:
         self.utolso_racs = None
         self.jatekos_e = False
         self.gondolkozasi_ido = 5
+        self.tamadas_id = 0
+        
         self.olesek = 0
         self.talalatok = 0
         self.dontes_fazis = 0
@@ -522,6 +524,7 @@ class P_elolenyek:
             "hp": self.hp,
             "el": self.el,
             "eltelt_ido": self.eltelt_ido,
+            "tamadas_id": self.tamadas_id,
 
             "eltelt_ido": self.eltelt_ido,
             "olesek": self.olesek,
@@ -544,8 +547,7 @@ class P_elolenyek:
                 for buff in self.buff_gyujto.values() if buff.get("el", True) and buff.get("cel_ido", 0) > 0
             ],
         }
-        self.attack = False
-        self.tuzelt = False
+        
         self.uj_buffok = {}
         return alapot
     
@@ -3479,6 +3481,7 @@ class VilagAllapot:
 
         jatekos.utes = jatekos.attack
         if jatekos.tamadas(delta_ido):
+            jatekos.tamadas_id += 1
             kozep_x = jatekos.x + jatekos.width / 2
             kozep_y = jatekos.y - jatekos.height / 2
  
