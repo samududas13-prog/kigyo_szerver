@@ -154,6 +154,8 @@ class Beallitasok:
 
 
         self.utes_cooldown = 1
+        self.p_utes_cooldown = 0.35
+        self.p_alap_hp = 15
 
 class KorSeged:
     @staticmethod
@@ -448,7 +450,7 @@ class P_elolenyek:
         self.sebesseg = beallitasok.jatekos_sebesseg
         self.alap_sebesseg = self.sebesseg
         self.fajta = fajta
-        self.alap_hp = float(beallitasok.jatekos_hp)
+        self.alap_hp = float(beallitasok.p_alap_hp)
         self.hp = self.alap_hp
         self.tamadas_szelesseg = 40
         self.tamadas_magassag = 30
@@ -462,8 +464,8 @@ class P_elolenyek:
         self.tuzelt = False
         self.jump = False
         self.attack = False
-        self.utes_cooldown = beallitasok.utes_cooldown
-        self.utes_idozito = beallitasok.utes_cooldown -0.3
+        self.utes_cooldown = beallitasok.p_utes_cooldown
+        self.utes_idozito = beallitasok.p_utes_cooldown -0.3
         self.utes_cooldown_alap = self.utes_cooldown-0.5
         self.eltelt_ido = 0.0
         self.utolso_racs = None
@@ -600,8 +602,8 @@ class Kamera:
         self.kepernyo_magassag = kepernyo_magassag
 
         
-        self.holtter_szelesseg = 50  
-        self.holtter_magassag = 50 
+        self.holtter_szelesseg = 150  
+        self.holtter_magassag = 200   
         
        
         self.fokusz_x = 0
@@ -3469,8 +3471,7 @@ class VilagAllapot:
             jatekos.akcio = "Falling Down"
         #else:
         #    jatekos.akcio = "Idle"
-        #if jobbra and balra or not balra and not jobbra and not ugras:
-            #jatekos.irany = 0
+        
         if jobbra:
             jatekos.irany = 1
         elif balra:
@@ -3509,6 +3510,9 @@ class VilagAllapot:
                     jatekos.talalatok += 1
                     if masik.hp <= 0:
                         jatekos.olesek += 1
+
+        if jobbra and balra or not balra and not jobbra and not ugras:
+            jatekos.irany = 0
 
 
 def kodbol_port(kod, beallitasok = None):
