@@ -495,6 +495,7 @@ class P_elolenyek:
         #'Running', 'Slashing', 'Slashing in The Air', 'Sliding', 'Throwing', 'Throwing in The Air', 'Walking']
         self.akcio = "Idle"
         self.irany = 1
+        self.loves_irany = 1
         self.kamera  = None
         self.k_szelesseg = k_szelleseg #screen width
         self.k_magassag = k_magassag
@@ -3474,8 +3475,10 @@ class VilagAllapot:
         
         if jobbra:
             jatekos.irany = 1
+            jatekos.loves_irany = 1
         elif balra:
             jatekos.irany = -1
+            jatekos.loves_irany = -1
 
         jatekos.kamera.mozgas(jatekos.x, jatekos.y, jatekos.width, jatekos.height, jatekos.irany)
 
@@ -3493,7 +3496,7 @@ class VilagAllapot:
                 hitbox_x = kozep_x - jatekos.tamadas_szelesseg / 2
                 hitbox_y = jatekos.y
             else:
-                if jatekos.irany == -1:
+                if jatekos.loves_irany == -1:
                     hitbox_x = jatekos.x - jatekos.tamadas_szelesseg
                 else:
                     hitbox_x = jatekos.x + jatekos.width
