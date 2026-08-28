@@ -3469,9 +3469,9 @@ class VilagAllapot:
             jatekos.akcio = "Falling Down"
         #else:
         #    jatekos.akcio = "Idle"
-        if jobbra and balra or not balra and not jobbra and not ugras:
-            jatekos.irany = 0
-        elif jobbra:
+        #if jobbra and balra or not balra and not jobbra and not ugras:
+            #jatekos.irany = 0
+        if jobbra:
             jatekos.irany = 1
         elif balra:
             jatekos.irany = -1
