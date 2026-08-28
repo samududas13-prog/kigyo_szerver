@@ -55,7 +55,7 @@ def ldtk_terkep_betoltes(fajl, szoba_nev=None):
             "intgrid": {
                 1: {
                     "fajta": "lava",
-                    "utkozik": False,
+                    "utkozik": True,
                     "sebez": True,
                 },
             },
